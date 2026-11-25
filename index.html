@@ -192,27 +192,13 @@ const actual=CICLOS.find(c=>c.actual);
 const fmt=n=>n==null?'—':(Number.isInteger(n)?String(n):n.toFixed(2));
 const colorNota=n=>n==null?'':n>=90?'var(--ok)':n>=80?'var(--tinta)':n>=70?'var(--aviso)':'var(--mal)';
 
-function vistaLogin(){
- document.getElementById('raiz').innerHTML=`
- <div class="login"><form id="fl">
-  <div class="logo"><b>me</b><span>miescuela.com</span></div>
-  <div><h1 style="font-size:24px">Portal del alumno</h1><p style="margin:4px 0 0;color:var(--gris);font-size:14px">Entra con tu matrícula y tu contraseña.</p></div>
-  <label>Matrícula<input id="lm" inputmode="numeric" autocomplete="username" value="12345678"></label>
-  <label>Contraseña<input type="password" autocomplete="current-password" value="demo1234"></label>
-  <button class="btn" type="submit">Entrar</button>
-  <a href="#" onclick="alert('Prototipo: aquí iría la recuperación de contraseña por correo.');return false" style="font-size:13px;text-align:center">¿Olvidaste tu contraseña?</a>
-  <p class="aviso-proto">Prototipo de rediseño · escuela y alumno ficticios</p>
- </form></div>`;
- document.getElementById('fl').onsubmit=e=>{e.preventDefault();sessionStorage.setItem('dentro','1');location.hash='#inicio';pintar()};
-}
-
 function marco(ruta,titulo,html){
  const nav=[];let g='';
  for(const [k,t,i,gr] of RUTAS){if(gr!==g){g=gr;nav.push(`<div class="grupo">${gr}</div>`)}nav.push(`<a href="#${k}" class="${k===ruta?'activo':''}">${ic(i)}${t}</a>`)}
  const inf=[['inicio','Inicio','inicio'],['calificaciones','Calif.','calif'],['kardex','Kárdex','kardex'],['pagos','Pagos','pagos']];
  document.getElementById('raiz').innerHTML=`
  <div class="app">
-  <aside class="lateral"><div class="logo"><b>me</b><span>miescuela.com</span></div><nav class="nav">${nav.join('')}<div class="grupo"></div><a href="#salir">${ic('salir')}Salir</a></nav></aside>
+  <aside class="lateral"><div class="logo"><b>me</b><span>miescuela.com</span></div><nav class="nav">${nav.join('')}</nav></aside>
   <div class="cuerpo">
    <header class="barra"><h1>${titulo}</h1><a class="yo" href="#perfil" aria-label="Mis datos"><span class="avatar">${ALUMNO.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${ALUMNO.nombre}</span></a></header>
    <main>${html}</main>
@@ -226,7 +212,7 @@ function marco(ruta,titulo,html){
 function abrirMas(){
  const d=document.createElement('div');d.className='hoja-fondo';
  const extra=RUTAS.filter(r=>!['inicio','calificaciones','kardex','pagos'].includes(r[0]));
- d.innerHTML=`<div class="hoja">${extra.map(([k,t,i])=>`<a href="#${k}">${ic(i)}${t}</a>`).join('')}<a href="#salir">${ic('salir')}Salir</a></div>`;
+ d.innerHTML=`<div class="hoja">${extra.map(([k,t,i])=>`<a href="#${k}">${ic(i)}${t}</a>`).join('')}</div>`;
  d.onclick=e=>{if(e.target===d||e.target.closest('a'))d.remove()};
  document.body.appendChild(d);
 }
@@ -396,8 +382,6 @@ function pintarKardex(ciclo){
 
 function pintar(){
  let r=(location.hash||'').slice(1)||'inicio';
- if(r==='salir'){sessionStorage.removeItem('dentro');history.replaceState(null,'','#');return vistaLogin()}
- if(!sessionStorage.getItem('dentro'))return vistaLogin();
  const def=RUTAS.find(x=>x[0]===r)||RUTAS[0];
  marco(def[0],def[1],V[def[0]]());
  if(def[0]==='kardex'){pintarKardex(actual.ciclo);document.getElementById('tk').onclick=e=>{const b=e.target.closest('button');if(b)pintarKardex(b.dataset.c)}}

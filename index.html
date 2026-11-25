@@ -82,6 +82,27 @@ td.num,th.num{text-align:right}
 .form{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .campo{display:flex;flex-direction:column;gap:2px;padding:10px 0;border-top:1px solid var(--linea)}
 .campo small{font-size:12px;color:var(--gris);font-weight:600}
+.hor{display:flex;flex-direction:column}
+.hor .b{display:grid;grid-template-columns:92px 1fr;gap:14px;padding:12px 0;border-top:1px solid var(--linea);align-items:center}
+.hor .b:first-child{border-top:0}
+.hor .h{font:600 14px 'Space Grotesk',sans-serif}.hor .h span{display:block;font:500 12px Inter,sans-serif;color:var(--gris)}
+.hor .c{border-left:4px solid var(--marca);padding:6px 12px;border-radius:4px 12px 12px 4px;background:var(--suave)}
+.hor .c b{display:block;font-size:14px}.hor .c span{font-size:12px;color:var(--gris)}
+.hor .b.ahora .c{background:var(--marca);color:#fff}.hor .b.ahora .c span{color:rgba(255,255,255,.8)}
+.semana{display:grid;gap:4px;font-size:12px;position:relative}
+.semana .cab{font-weight:700;color:var(--gris);text-align:center;padding:6px 0;font-size:12px}
+.semana .cab.hoy{color:var(--marca)}
+.semana .hr{color:var(--gris);font-size:11px;text-align:right;padding-right:6px;transform:translateY(-7px)}
+.semana .celda{border-top:1px dashed var(--linea)}
+.semana .cl{background:var(--suave);border-left:4px solid var(--marca);border-radius:4px 10px 10px 4px;padding:6px 8px;overflow:hidden;z-index:1}
+.semana .cl b{display:block;font-size:12px;line-height:1.25}.semana .cl span{display:block;color:var(--gris);font-size:11px}
+.semana .cl.ahora{background:var(--marca);color:#fff}.semana .cl.ahora span{color:rgba(255,255,255,.8)}
+.semana .libre{grid-row:2/-1;background:repeating-linear-gradient(135deg,transparent 0 8px,#FAF8FC 8px 16px);border-radius:10px}
+.dias{display:flex;gap:4px;margin-bottom:6px}
+.dias button{flex:1;border:0;border-radius:10px;padding:8px 0;font-weight:700;font-size:12px;background:var(--suave);color:var(--tinta)}
+.dias button.sin{color:#B8AFC4;background:none}
+.dias button.activo{background:var(--marca);color:#fff}
+.solo-movil{display:none}
 .inferior{display:none}
 .hoja-fondo{position:fixed;inset:0;background:rgba(28,20,38,.4);z-index:20;display:flex;align-items:flex-end;justify-content:center}
 .hoja{background:#fff;width:100%;max-width:520px;border-radius:24px 24px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -102,6 +123,9 @@ td.num,th.num{text-align:right}
   .inferior .activo{color:var(--marca)}
   .inferior svg{width:22px;height:22px}
   .ocultar-movil{display:none}
+  .hor .b{grid-template-columns:62px 1fr;gap:10px}
+  .solo-escritorio{display:none}
+  .solo-movil{display:block}
   td,th{padding:8px 4px}
 }
 </style>
@@ -119,6 +143,13 @@ const CICLOS=[
 ];
 const ESTADOS=[['15/07/2026','2SEM/2026','Activo','5.º'],['13/01/2026','1SEM/2026','Activo','4.º'],['14/07/2025','2SEM/2025','Activo','3.º'],['07/01/2025','1SEM/2025','Activo','2.º'],['25/06/2024','2SEM/2024','Nuevo ingreso','1.º']];
 const MENSUALIDADES=[['Inscripción 2SEM/2026','10/07/2026','08/07/2026'],['Colegiatura agosto','10/08/2026','05/08/2026'],['Colegiatura septiembre','10/09/2026','06/09/2026'],['Colegiatura octubre','10/10/2026','04/10/2026'],['Colegiatura noviembre','10/11/2026','07/11/2026'],['Colegiatura diciembre','10/12/2026','']];
+// Cada clase: [día (1=lunes … 6=sábado), inicio, fin, clave, profesor, aula].
+// Sirve igual para turno sabatino que para alumnos de lunes a viernes.
+const DIAS=['','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const HORARIO={bloques:[
+ {nombre:'Bloque 1',del:'01/08/2026',al:'26/09/2026',clases:[[6,'08:00','09:30','21E031','Lic. Ana Torres','Aula 12'],[6,'09:30','11:00','21E033','Mtro. Luis Fernández','Aula 12'],[6,'11:00','12:30','21E036','Not. Ricardo Salas','Aula 9'],[6,'12:30','14:00','21E037','Lic. Patricia Gómez','Sala de juicios orales']]},
+ {nombre:'Bloque 2',del:'03/10/2026',al:'05/12/2026',clases:[[6,'08:00','09:30','21E032','C.P. Jorge Medina','Aula 12'],[6,'09:30','11:00','21E034','Lic. Carmen Ruiz','Aula 9'],[6,'11:00','12:30','21E035','Lic. Sofía Ramírez','Aula 14']]}
+]};
 const DOCS_ENTREGADOS=[['Acta de nacimiento','09/08/2024'],['CURP','25/06/2024'],['Ficha de inscripción','25/06/2024'],['Validación','09/08/2024']];
 const DOCS_PENDIENTES=['Relación de estudios de bachillerato legalizada','4 fotografías tamaño infantil, blanco y negro','Carta de trabajo','Certificado médico con tipo sanguíneo'];
 
@@ -140,10 +171,16 @@ const I={
  reloj:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
  bajar:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>'
 };
+const nomMat=cl=>(CICLOS.flatMap(c=>c.materias).find(m=>m[0]===cl)||[,cl])[1];
+const min=h=>{const[a,b]=h.split(':').map(Number);return a*60+b};
+const aFecha=t=>{const[d,m,y]=t.split('/').map(Number);return new Date(y,m-1,d)};
+const hhmm=x=>String(Math.floor(x/60)).padStart(2,'0')+':'+String(x%60).padStart(2,'0');
+const clasesDe=b=>b.clases.map(([dia,i,f,cl,prof,aula])=>({dia,i,f,cl,prof,aula})).sort((a,b)=>a.dia-b.dia||min(a.i)-min(b.i));
+const bloqueActual=()=>{const h=new Date();h.setHours(0,0,0,0);return HORARIO.bloques.find(b=>h<=aFecha(b.al))||HORARIO.bloques.at(-1)};
 const ic=(k,s='')=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${s}>${I[k]}</svg>`;
 
 const RUTAS=[
- ['inicio','Inicio','inicio','Escolar'],['calificaciones','Calificaciones','calif','Escolar'],['kardex','Kárdex','kardex','Escolar'],['faltas','Faltas','faltas','Escolar'],['actividades','Actividades','act','Escolar'],['calendario','Calendario','cal','Escolar'],
+ ['inicio','Inicio','inicio','Escolar'],['calificaciones','Calificaciones','calif','Escolar'],['kardex','Kárdex','kardex','Escolar'],['horario','Horario','reloj','Escolar'],['faltas','Faltas','faltas','Escolar'],['actividades','Actividades','act','Escolar'],['calendario','Calendario','cal','Escolar'],
  ['pagos','Pagos','pagos','Administrativo'],['documentos','Documentos','docs','Administrativo'],['trayectoria','Trayectoria','tray','Administrativo'],['fiscales','Datos fiscales','fiscal','Administrativo'],['perfil','Mis datos','perfil','Cuenta']
 ];
 
@@ -218,6 +255,10 @@ const V={
    <span style="font-size:13px;color:var(--gris)">${ALUMNO.creditos} de ${ALUMNO.creditosTotales} créditos cursados · plan ${ALUMNO.plan}</span>
   </section>
   <section class="tarjeta">
+   <div class="fila"><h2>Próxima clase</h2><a href="#horario" style="font-size:13px;font-weight:600">Ver horario</a></div>
+   ${(()=>{const b=bloqueActual(),c=clasesDe(b)[0];return `<div class="lista"><div class="it"><span class="chip" style="padding:6px">${ic('reloj','style="width:16px;height:16px"')}</span><div class="t"><b>${nomMat(c.cl)}</b><span>${DIAS[c.dia]} ${c.i}–${c.f} · ${c.aula} · ${c.prof}</span></div></div></div>`})()}
+  </section>
+  <section class="tarjeta">
    <div class="fila"><h2>Materias de ${actual.ciclo}</h2><a href="#calificaciones" style="font-size:13px;font-weight:600">Ver todo</a></div>
    <div class="lista">${actual.materias.map(m=>itemMateria(m,false)).join('')}</div>
   </section>
@@ -252,6 +293,13 @@ const V={
   <div class="tabs" id="tk">${CICLOS.slice().reverse().map((c,i)=>`<button data-c="${c.ciclo}" class="${i===0?'activo':''}">${c.sem}.º · ${c.ciclo}</button>`).join('')}</div>
   <section class="tarjeta" id="kc"></section>
   <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn sec" onclick="window.print()">${ic('bajar','style="width:16px;height:16px;vertical-align:-3px;margin-right:6px"')}Descargar kárdex</button></div>`;
+ },
+ horario(){
+  const act=bloqueActual();
+  return `
+  <div class="tabs" id="hb">${HORARIO.bloques.slice().reverse().map(b=>`<button data-b="${b.nombre}" class="${b===act?'activo':''}">${b.nombre}${b===act?' · en curso':''}</button>`).join('')}</div>
+  <div id="hc"></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn sec" onclick="window.print()">${ic('bajar','style="width:16px;height:16px;vertical-align:-3px;margin-right:6px"')}Descargar horario</button></div>`;
  },
  faltas(){
   return `<section class="tarjeta"><div class="fila"><h2>${actual.ciclo}</h2><span class="chip ok">${ic('check','style="width:14px;height:14px"')} Sin faltas</span></div>
@@ -312,6 +360,33 @@ const V={
  }
 };
 
+function pintarHorario(nombre,diaSel){
+ const b=HORARIO.bloques.find(x=>x.nombre===nombre),c=clasesDe(b),el=document.getElementById('hc');
+ const ahora=new Date(),hoy0=new Date(ahora);hoy0.setHours(0,0,0,0);
+ const vigente=hoy0>=aFecha(b.del)&&hoy0<=aFecha(b.al),hoyDia=ahora.getDay(),m=ahora.getHours()*60+ahora.getMinutes();
+ const enCurso=x=>vigente&&x.dia===hoyDia&&m>=min(x.i)&&m<min(x.f);
+ const terminado=hoy0>aFecha(b.al),porEmpezar=hoy0<aFecha(b.del);
+ const chip=terminado?'<span class="chip">Terminado</span>':porEmpezar?'<span class="chip aviso">Próximo</span>':'<span class="chip ok">En curso</span>';
+ const conClase=[...new Set(c.map(x=>x.dia))];
+ const dias=[1,2,3,4,5].concat(conClase.includes(6)?[6]:[]);
+ const t0=Math.floor(Math.min(...c.map(x=>min(x.i)))/60)*60,t1=Math.ceil(Math.max(...c.map(x=>min(x.f)))/60)*60,paso=30,filas=(t1-t0)/paso;
+ const fila=t=>2+(t-t0)/paso;
+ let g='<div></div>'+dias.map((d,k)=>`<div class="cab ${vigente&&d===hoyDia?'hoy':''}" style="grid-column:${k+2}">${DIAS[d]}</div>`).join('');
+ for(let r=0;r<filas;r++){const t=t0+r*paso;g+=`<div class="hr" style="grid-row:${r+2};grid-column:1">${t%60===0?hhmm(t):''}</div>`+dias.map((d,k)=>`<div class="celda" style="grid-row:${r+2};grid-column:${k+2}"></div>`).join('')}
+ dias.forEach((d,k)=>{if(!conClase.includes(d))g+=`<div class="libre" style="grid-column:${k+2}"></div>`});
+ g+=c.map(x=>`<div class="cl ${enCurso(x)?'ahora':''}" style="grid-column:${dias.indexOf(x.dia)+2};grid-row:${fila(min(x.i))}/${fila(min(x.f))}"><b>${nomMat(x.cl)}</b><span>${x.i}–${x.f}</span><span>${x.aula}</span><span>${x.prof}</span></div>`).join('');
+ const sel=diaSel||(conClase.includes(hoyDia)?hoyDia:conClase[0]);
+ const lista=c.filter(x=>x.dia===sel).map(x=>`<div class="b ${enCurso(x)?'ahora':''}"><div class="h">${x.i}<span>a ${x.f}</span></div><div class="c"><b>${nomMat(x.cl)}</b><span>${x.cl} · ${x.prof} · ${x.aula}</span></div></div>`).join('')||`<div class="vacio">${ic('cal')}Sin clases este día.</div>`;
+ const resumen=conClase.map(d=>{const cd=c.filter(x=>x.dia===d);return `${DIAS[d].toLowerCase()} de ${cd[0].i} a ${cd.at(-1).f}`}).join(' · ');
+ el.innerHTML=`<section class="tarjeta">
+  <div class="fila"><div><h2>${b.nombre} · ${new Set(c.map(x=>x.cl)).size} materias</h2><span style="font-size:13px;color:var(--gris)">Del ${b.del} al ${b.al} · ${resumen}</span></div>${chip}</div>
+  <div class="semana solo-escritorio" style="grid-template-columns:52px repeat(${dias.length},1fr);grid-template-rows:auto repeat(${filas},28px)">${g}</div>
+  <div class="solo-movil"><div class="dias" id="hd">${dias.map(d=>`<button data-d="${d}" class="${d===sel?'activo':''} ${conClase.includes(d)?'':'sin'}">${DIAS[d].slice(0,3)}</button>`).join('')}</div><div class="hor">${lista}</div></div>
+ </section>`;
+ document.querySelectorAll('#hb button').forEach(x=>x.classList.toggle('activo',x.dataset.b===nombre));
+ document.getElementById('hd').onclick=e=>{const k=e.target.closest('button');if(k)pintarHorario(nombre,+k.dataset.d)};
+}
+
 function pintarKardex(ciclo){
  const c=CICLOS.find(x=>x.ciclo===ciclo),el=document.getElementById('kc');
  el.innerHTML=`<div class="fila"><div><h2>${c.sem}.º semestre</h2><span style="font-size:13px;color:var(--gris)">${c.ciclo}${c.actual?' · en curso':''}</span></div><div style="text-align:right"><small style="font-size:12px;color:var(--gris);font-weight:600">Promedio</small><div class="nota" style="font-size:24px">${fmt(Math.round(promCiclo(c)*100)/100)}</div></div></div>
@@ -326,6 +401,7 @@ function pintar(){
  const def=RUTAS.find(x=>x[0]===r)||RUTAS[0];
  marco(def[0],def[1],V[def[0]]());
  if(def[0]==='kardex'){pintarKardex(actual.ciclo);document.getElementById('tk').onclick=e=>{const b=e.target.closest('button');if(b)pintarKardex(b.dataset.c)}}
+ if(def[0]==='horario'){pintarHorario(bloqueActual().nombre);document.getElementById('hb').onclick=e=>{const b=e.target.closest('button');if(b)pintarHorario(b.dataset.b)}}
  document.title=def[1]+' · miescuela.com';
 }
 addEventListener('hashchange',pintar);

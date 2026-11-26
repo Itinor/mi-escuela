@@ -179,7 +179,7 @@ async function cargarProfesor(yo) {
   const {personas} = await cargarGrupos(grupos, null);
   REAL.usuarios = Object.fromEntries(Object.values(personas).map(p => [p.id, p.usuario || '']));
   reemplazar(GRUPOS_PROF, grupos.map(comoGrupoProf));
-  const ids = [...new Set(Object.values(ALUMNOS_G).flat().map(a => a[0]))];
+  const ids = [...new Set(grupos.flatMap(g => ALUMNOS_G[g.id].map(a => a[0])))];
   const [tut, recibidos, enviados] = await Promise.all([L('tutores', {alumno_id: ids}), L('mensajes', {para: yo.id}), L('mensajes', {de: yo.id})]);
   REAL.padreDe = {}; tut.forEach(t => REAL.padreDe[t.alumno_id] ??= t.padre_id);
   REAL.conCuenta = new Set(Object.values(personas).filter(p => p.auth_id).map(p => p.id));
@@ -198,6 +198,8 @@ async function cargarProfesor(yo) {
 }
 
 async function cargarReal(yo) {
+  // Sin rastro de la demostración: solo quedan los grupos y alumnos reales de esta cuenta.
+  for (const o of [ALUMNOS_G, ASIST, PERDONADOS, TAREAS_G, EXAMENES, MSG_GRUPO, MSG_IND, HIST, PONDER, MANUAL]) vaciar(o);
   REAL = {persona: yo, rol: yo.rol, nivel: yo.nivel, rutas: [], fechas: {}, faltas: {}, grupos: [], profes: {}, avisos: [], leidos: new Set(), pagos: [], notas: [], asisInfo: {}};
   if (yo.rol === 'alumno') await cargarAlumno(yo);
   else if (yo.rol === 'padre') await cargarPadre(yo);

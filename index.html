@@ -453,7 +453,7 @@ for(const g of GRUPOS_PROF){const r=azar('tareas'+g.id);TAREAS_G[g.id]=[];
  if(g.id==='A3')TAREAS_G.A3.push({id:++sigTarea,ref:1,titulo:TAREAS[0].titulo,parcial:3,publicada:TAREAS[0].publicada,entrega:TAREAS[0].entrega,hora:TAREAS[0].hora,desc:TAREAS[0].desc,req:TAREAS[0].req,entregas:ENTREGAS});
  else{const t={id:++sigTarea,titulo:'Ensayo final',parcial:3,publicada:'23/11/2026',entrega:'05/12/2026',hora:'23:59',desc:'Ensayo de cierre del semestre.',req:['3 a 5 cuartillas','Entrega en PDF'],entregas:{}};
   ALUMNOS_G[g.id].forEach(([m,nom])=>{if(r()<.3)t.entregas[m]={archivo:nom.split(' ')[1].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')+'_ensayo.pdf',url:'ejemplos/trabajo_ejemplo.pdf',fecha:'25/11 · 20:'+String(r()*60|0).padStart(2,'0')}});TAREAS_G[g.id].push(t)}}
-const tareaProfDe=idAlumno=>TAREAS_G.A3.find(t=>t.ref===idAlumno);
+const tareaProfDe=idAlumno=>TAREAS_G.A3?.find(t=>t.ref===idAlumno);
 
 // Exámenes por parcial (solo los que ya se aplicaron).
 const EXAMENES={};
@@ -1342,8 +1342,8 @@ addEventListener('hashchange',pintar);
 const arranque=()=>window.arrancar?arrancar():pintar();
 if(document.readyState==='loading')addEventListener('DOMContentLoaded',arranque);else arranque();
 </script>
-<script src="config.js?v=20261126b"></script>
-<script src="conectado.js?v=20261126b"></script>
-<script src="real.js?v=20261126b"></script>
+<script src="config.js?v=20261126c"></script>
+<script src="conectado.js?v=20261126c"></script>
+<script src="real.js?v=20261126c"></script>
 </body>
 </html>

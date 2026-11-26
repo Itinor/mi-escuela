@@ -166,6 +166,45 @@ textarea{font:inherit;padding:12px 14px;border-radius:12px;border:1.5px solid va
 .menu-g a:hover{background:var(--suave)}.menu-g svg{width:18px;height:18px;color:#1F5F45}
 .detalle{background:#fff;border-radius:20px;width:100%;max-width:560px;max-height:92vh;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:12px}
 tr[data-al]:hover td{background:var(--suave)}
+.ico-adj{border:0;background:var(--suave);color:var(--marca);border-radius:12px;width:46px;flex:none;display:grid;place-items:center;cursor:pointer}
+.ico-adj svg{width:20px;height:20px}
+.ico-adj.on{background:var(--mal);color:#fff;animation:latido 1s ease-in-out infinite}
+@keyframes latido{50%{transform:scale(1.08)}}
+.escribir .tx{flex:1;min-width:0}
+.adj-img{display:block;max-width:min(240px,100%);max-height:260px;border-radius:12px;margin:2px 0 6px;cursor:zoom-in}
+.adj-audio audio{width:250px;max-width:100%;height:40px;display:block;margin-bottom:4px}
+.adj-arch{display:flex;gap:10px;align-items:center;text-align:left;border:0;background:rgba(255,255,255,.7);border-radius:12px;padding:8px 10px;margin-bottom:6px;color:inherit;max-width:260px}
+.burbuja.mia .adj-arch{background:rgba(255,255,255,.16)}
+.adj-arch svg{width:24px;height:24px;flex:none}.adj-arch b{display:block;font-size:13px;word-break:break-all}.adj-arch small{margin:0}
+.tabs button.suave:not(.activo){background:var(--suave)}
+/* Portada de Inicio: formas que flotan y se desvanece al bajar */
+.portada{position:relative;overflow:hidden;min-height:210px;justify-content:flex-end;will-change:opacity,transform;transform-origin:top center}
+.portada>*:not(.formas){position:relative}
+.formas i{position:absolute;border-radius:50%;opacity:.5;animation:flota 9s ease-in-out infinite}
+.formas i:nth-child(1){width:220px;height:220px;right:-50px;top:-70px;background:radial-gradient(circle at 30% 30%,#B57BEA,transparent 70%)}
+.formas i:nth-child(2){width:140px;height:140px;right:120px;bottom:-60px;background:radial-gradient(circle at 50% 50%,#F2A65A,transparent 70%);animation-delay:-3s;opacity:.35}
+.formas i:nth-child(3){width:90px;height:90px;right:40px;bottom:30px;background:radial-gradient(circle at 50% 50%,#7FD1B9,transparent 70%);animation-delay:-6s;opacity:.4}
+@keyframes flota{50%{transform:translate(-14px,10px) scale(1.06)}}
+.barra.sombra{box-shadow:0 6px 18px rgba(28,20,38,.08)}
+/* Secciones que aparecen al bajar */
+.revela{opacity:0;transform:translateY(18px);transition:opacity .5s ease,transform .5s ease}
+.revela.visto{opacity:1;transform:none}
+/* Botones y tarjetas que reaccionan al cursor */
+.btn,.tabs button,.tabs a.tab,.rapidas button,.seg button,.dias button,.fechas button,.nav a,.ico-adj,.modo,.adj-arch{transition:transform .18s ease,background-color .18s ease,color .18s ease,box-shadow .18s ease}
+a.tarjeta{transition:transform .22s ease,box-shadow .22s ease}
+.btn:active,.ico-adj:active{transform:scale(.96)}
+@media (hover:hover){
+ .btn:hover{transform:translateY(-2px) scale(1.04);box-shadow:0 8px 18px rgba(75,26,120,.28)}
+ .btn.sec:hover{background:var(--marca);color:#fff}
+ .prof .btn.sec:hover{background:#1F5F45;box-shadow:0 8px 18px rgba(20,85,54,.28)}
+ .tabs button:not(.activo):hover,.tabs a.tab:not(.activo):hover,.rapidas button:not(.on):hover,.ico-adj:hover{transform:translateY(-1px) scale(1.04);background:var(--marca);color:#fff}
+ .prof .tabs button:not(.activo):hover,.prof .tabs a.tab:not(.activo):hover,.prof .rapidas button:not(.on):hover{background:#1F5F45}
+ .nav a:not(.activo):hover{transform:translateX(4px)}
+ .modo:hover{background:var(--suave);transform:translateX(3px)}
+ a.tarjeta:hover{transform:translateY(-4px);box-shadow:0 14px 30px rgba(28,20,38,.12)}
+ .adj-arch:hover{transform:scale(1.02)}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}.revela{opacity:1;transform:none}}
 .solo-movil{display:none}
 .inferior{display:none}
 .hoja-fondo{position:fixed;inset:0;background:rgba(28,20,38,.4);z-index:20;display:flex;align-items:flex-end;justify-content:center}
@@ -264,6 +303,8 @@ const I={
  ojo:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
  cerrar:'<path d="M18 6 6 18M6 6l12 12"/>',
  cambio:'<path d="M17 3l4 4-4 4M21 7H9M7 21l-4-4 4-4M3 17h12"/>',
+ clip:'<path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/>',
+ mic:'<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 17v4M8 21h8"/>',
  act:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
  mas:'<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
  salir:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
@@ -354,24 +395,29 @@ for(const g of GRUPOS_PROF){const r=azar('exam'+g.id);EXAMENES[g.id]={};
  for(const [m] of ALUMNOS_G[g.id]){EXAMENES[g.id][m]={};for(const p of CAL.parciales)if(yaPaso(p.examen)||fTxt(hoy0())===p.examen)EXAMENES[g.id][m][p.n]=Math.max(30,Math.min(100,Math.round(NIVEL[g.id+m]+(r()-.5)*18)))}}
 
 // Ponderación de cada grupo (cátedra libre). Recomendación de rectoría: 30 % trabajos y asistencia, 70 % examen.
-const PONDER={};GRUPOS_PROF.forEach(g=>PONDER[g.id]={trab:20,asis:10,exam:70});
-PONDER.A2={trab:0,asis:0,exam:100};
+// Forma de calificar recomendada por dirección: aplica a todos los grupos mientras el profesor no la cambie.
+// trab/asis/exam = % dentro de cada parcial (suman 100). final = % del semestre que vale el examen final (0 = sin examen final).
+const DIRECCION={trab:20,asis:10,exam:70,final:0};
+const EXAMEN_FINAL='10/12/2026';
+const PONDER={A2:{trab:0,asis:0,exam:100,final:0}}; // A2: la profesora decidió calificar solo con exámenes
+const pond=g=>PONDER[g]||DIRECCION;
+const resumenW=w=>`Trabajos ${w.trab} % · Asistencia ${w.asis} % · Examen ${w.exam} % en cada parcial${w.final?` · Examen final ${w.final} % del semestre`:''}`;
 
 // Mensajes del profesor: grupales e individuales. Los de Pedro (A3) se comparten con su vista de alumno (MENSAJES['21E035']).
 const MSG_GRUPO={A1:[],A2:[],A3:[],A4:[]},MSG_IND={A1:{},A2:{},A3:{},A4:{}};
 MSG_GRUPO.A3.push(['prof',MENSAJES['21E035'][0][1],MENSAJES['21E035'][0][2]]);MENSAJES['21E035'][0][3]='grupo';
 MSG_IND.A3['12345601']=[['alumno','Maestra, ¿puedo entregar el ensayo el domingo? Tuve un problema familiar.','25/11 · 09:12']];
 MSG_IND.A1[ALUMNOS_G.A1[2][0]]=[['alumno','Buenas tardes, maestra. ¿El examen del parcial 3 incluye el tema de tentativa?','24/11 · 17:40']];
-const hiloInd=(g,m)=>g==='A3'&&m===ALUMNO.matricula?MENSAJES['21E035'].filter(x=>!x[3]).map(x=>[x[0]==='yo'?'alumno':'prof',x[1],x[2]]):(MSG_IND[g][m]||(MSG_IND[g][m]=[]));
-function enviarProf(g,dest,txt){const f=ahoraTxt();
- if(dest==='grupo'){MSG_GRUPO[g].push(['prof',txt,f]);if(g==='A3')MENSAJES['21E035'].push(['prof',txt,f,'grupo'])}
- else if(g==='A3'&&dest===ALUMNO.matricula)MENSAJES['21E035'].push(['prof',txt,f]);
- else hiloInd(g,dest).push(['prof',txt,f])}
+const hiloInd=(g,m)=>g==='A3'&&m===ALUMNO.matricula?MENSAJES['21E035'].filter(x=>!x[3]).map(x=>[x[0]==='yo'?'alumno':'prof',x[1],x[2],null,x[4]]):(MSG_IND[g][m]||(MSG_IND[g][m]=[]));
+function enviarProf(g,dest,txt,adj=null){const f=ahoraTxt();
+ if(dest==='grupo'){MSG_GRUPO[g].push(['prof',txt,f,null,adj]);if(g==='A3')MENSAJES['21E035'].push(['prof',txt,f,'grupo',adj])}
+ else if(g==='A3'&&dest===ALUMNO.matricula)MENSAJES['21E035'].push(['prof',txt,f,null,adj]);
+ else hiloInd(g,dest).push(['prof',txt,f,null,adj])}
 const sinLeer=(g,m)=>{const h=hiloInd(g,m);return h.length&&h.at(-1)[0]==='alumno'};
 
 // Calificación de un parcial: trabajos (no entregado = 0; entregado sin calificar no cuenta), asistencia (presente o retardo cuenta) y examen.
 function calcParcial(g,m,n){
- const w=PONDER[g],ts=TAREAS_G[g].filter(t=>t.parcial===n&&aFecha(t.entrega)<=hoy0());
+ const w=pond(g),ts=TAREAS_G[g].filter(t=>t.parcial===n&&aFecha(t.entrega)<=hoy0());
  let s=0,c=0,pend=0,ent=0,falt=0;for(const t of ts){const e=t.entregas[m];if(!e){c++;falt++}else if(e.calif==null){pend++;ent++}else{s+=e.calif;c++;ent++}}
  const p=CAL.parciales[n-1],ses=SABADOS.filter(f=>aFecha(f)>=aFecha(p.del)&&aFecha(f)<=aFecha(p.al)&&ASIST[g][f]&&ASIST[g][f][m]);
  const cuenta=k=>ses.filter(f=>ASIST[g][f][m]===k).length,P=cuenta('P'),R=cuenta('R'),F=cuenta('F');
@@ -379,9 +425,11 @@ function calcParcial(g,m,n){
  const partes=[['trab',trab],['asis',asis],['exam',exam]];
  const falta=partes.some(([k,v])=>w[k]>0&&v==null);
  const final=falta?null:Math.round(partes.reduce((a,[k,v])=>a+(w[k]?v*w[k]/100:0),0)*10)/10;
- return {ts,trab,ent,pend,falt,total:ts.length,ses:ses.length,P,R,F,asis,exam,final};
+ return {ts,trab,ent,pend,falt,total:ts.length,ses:ses.length,P,R,F,asis,exam,final,abierto:!yaPaso(p.al)};
 }
-function calcSemestre(g,m){const ps=CAL.parciales.map(p=>calcParcial(g,m,p.n).final).filter(x=>x!=null);return ps.length?Math.round(ps.reduce((a,b)=>a+b,0)/ps.length*10)/10:null}
+function calcSemestre(g,m){const w=pond(g),ps=CAL.parciales.map(p=>calcParcial(g,m,p.n)).filter(c=>!c.abierto&&c.final!=null).map(c=>c.final);if(!ps.length)return null;
+ const p=ps.reduce((a,b)=>a+b,0)/ps.length,ef=EXAMENES[g][m]?.final;
+ return Math.round((w.final&&ef!=null?p*(100-w.final)/100+ef*w.final/100:p)*10)/10}
 
 const RUTAS=[
  ['inicio','Inicio','inicio','Escolar'],['calificaciones','Calificaciones','calif','Escolar'],['kardex','Kárdex','kardex','Escolar'],['horario','Horario','reloj','Escolar'],['faltas','Faltas','faltas','Escolar'],['actividades','Tareas','act','Escolar'],['mensajes','Mensajes','msg','Escolar'],['calendario','Calendario','cal','Escolar'],
@@ -415,6 +463,7 @@ function marco(ruta,titulo,html){
  </div>
  <nav class="inferior">${inf.map(([k,t,i])=>`<a href="#${k}" class="${k===ruta||ruta.startsWith('prof-g')&&k==='prof-grupos'?'activo':''}">${ic(i)}${t}</a>`).join('')}${prof?`<a href="#inicio">${ic('cambio')}Alumno</a>`:`<button id="bmas" class="${inf.some(x=>x[0]===ruta)?'':'activo'}">${ic('mas')}Más</button>`}</nav>`;
  if(!prof)document.getElementById('bmas').onclick=abrirMas;
+ setTimeout(revelar,0);
  window.scrollTo(0,0);
 }
 
@@ -437,7 +486,7 @@ const V={
   const pa=promCiclo(actual),capt=actual.materias.filter(m=>m[3]!=null).length;
   const pct=ALUMNO.creditos/ALUMNO.creditosTotales*100;
   return `
-  <section class="hero"><p>Hola,</p><h2>${ALUMNO.nombre.split(' ')[0]}</h2><p>${ALUMNO.carrera} · ${ALUMNO.semestre}.º semestre · ${ALUMNO.turno}</p><p style="font-size:12px;margin-top:6px">Matrícula ${ALUMNO.matricula}</p></section>
+  <section class="hero portada" id="portada"><span class="formas" aria-hidden="true"><i></i><i></i><i></i></span><p>Hola,</p><h2>${ALUMNO.nombre.split(' ')[0]}</h2><p>${ALUMNO.carrera} · ${ALUMNO.semestre}.º semestre · ${ALUMNO.turno}</p><p style="font-size:12px;margin-top:6px">Matrícula ${ALUMNO.matricula}</p></section>
   <div class="rejilla">
    <a class="tarjeta dato" href="#kardex" style="color:inherit"><small>Promedio general</small><b>${fmt(Math.round(promGeneral*100)/100)}</b><span>4 semestres cerrados</span></a>
    <a class="tarjeta dato" href="#calificaciones" style="color:inherit"><small>Este semestre</small><b>${fmt(pa)}</b><span>${capt} de ${actual.materias.length} materias calificadas</span></a>
@@ -613,17 +662,52 @@ let chatSel=null;
 function pintarMensajes(){
  const mats=bloqueActual().clases.map(c=>c[3]).filter((x,i,a)=>a.indexOf(x)===i);
  document.getElementById('cc').innerHTML=`<h2>Tus profesores</h2><span style="font-size:13px;color:var(--gris)">Escríbeles directo, sin pedir números ni correos.</span>
-  <div class="lista">${mats.map(cl=>{const m=MENSAJES[cl]||[],u=m.at(-1);return `<div class="it ${cl===chatSel?'activo':''}" data-cl="${cl}"><span class="avatar" style="width:40px;height:40px;font-size:12px">${profDe(cl).split(' ').slice(1).map(x=>x[0]).join('').slice(0,2)}</span><div class="t"><b>${profDe(cl)}</b><span>${nomMat(cl)}${u?' · '+esc(u[1]).slice(0,34)+(u[1].length>34?'…':''):''}</span></div></div>`}).join('')}</div>`;
+  <div class="lista">${mats.map(cl=>{const m=MENSAJES[cl]||[],u=m.at(-1);return `<div class="it ${cl===chatSel?'activo':''}" data-cl="${cl}"><span class="avatar" style="width:40px;height:40px;font-size:12px">${profDe(cl).split(' ').slice(1).map(x=>x[0]).join('').slice(0,2)}</span><div class="t"><b>${profDe(cl)}</b><span>${nomMat(cl)}${u?' · '+esc(previaMsg(u[1],u[4])).slice(0,34)+(previaMsg(u[1],u[4]).length>34?'…':''):''}</span></div></div>`}).join('')}</div>`;
  const ch=document.getElementById('ch');ch.classList.toggle('abierto',!!chatSel);
  const cv=document.getElementById('cv');
  if(!chatSel){cv.innerHTML=`<div class="vacio">${ic('msg')}Elige a un profesor para escribirle.</div>`;return}
  const m=MENSAJES[chatSel]||(MENSAJES[chatSel]=[]);
  cv.innerHTML=`<div class="fila"><div><button class="btn sec solo-movil" id="atras" style="padding:6px 10px;font-size:13px;margin-bottom:6px">← Profesores</button><h2>${profDe(chatSel)}</h2><span style="font-size:13px;color:var(--gris)">${nomMat(chatSel)} · ${chatSel}</span></div></div>
-  <div class="burbujas" id="bb">${m.length?m.map(([q,t,f,gr])=>`<div class="burbuja ${q==='yo'?'mia':''}">${gr?'<small style="font-weight:700;margin:0 0 2px">Para todo el grupo</small>':''}${esc(t)}<small>${f}</small></div>`).join(''):`<div class="vacio">Todavía no hay mensajes. Tu profesor recibe el aviso en la plataforma.</div>`}</div>
-  <form class="escribir" id="fm"><input id="tx" placeholder="Escribe tu mensaje…" autocomplete="off"><button class="btn" aria-label="Enviar">${ic('enviar','style="width:18px;height:18px;vertical-align:-3px"')}</button></form>`;
+  <div class="burbujas" id="bb">${m.length?m.map(([q,t,f,gr,a])=>burbuja(q==='yo',t,f,a,gr?'<small style="font-weight:700;margin:0 0 2px">Para todo el grupo</small>':'')).join(''):`<div class="vacio">Todavía no hay mensajes. Tu profesor recibe el aviso en la plataforma.</div>`}</div>
+  ${barraEscribir('fm','Escribe tu mensaje…')}`;
  const bb=document.getElementById('bb');bb.scrollTop=bb.scrollHeight;
- document.getElementById('fm').onsubmit=e=>{e.preventDefault();const v=document.getElementById('tx').value.trim();if(!v)return;const h=new Date();m.push(['yo',v,`${String(h.getDate()).padStart(2,'0')}/${String(h.getMonth()+1).padStart(2,'0')} · ${hhmm(h.getHours()*60+h.getMinutes())}`]);pintarMensajes();document.getElementById('tx').focus()};
+ conectarEscribir(document.getElementById('fm'),(v,a)=>{m.push(['yo',v,ahoraTxt(),null,a]);pintarMensajes();document.querySelector('#fm .tx').focus()});
+ cv.onclick=abrirAdj;
  const at=document.getElementById('atras');if(at)at.onclick=()=>{chatSel=null;pintarMensajes()};
+}
+
+// ---------- Adjuntos en mensajes: fotos, audios (también notas de voz) y archivos ----------
+const ADJ=[],GRAB={rec:null,cancelar:false};
+const pesoTxt=b=>b<1048576?Math.max(1,Math.round(b/1024))+' KB':(b/1048576).toFixed(1)+' MB';
+const esAudio=a=>/^audio\//.test(a.blob.type)||/\.(mp3|m4a|wav|ogg|webm|opus|aac)$/i.test(a.nombre);
+const previaMsg=(t,a)=>t||(a?(a.voz?'Nota de voz':VISOR.tipo(a.nombre,a.blob.type)==='imagen'?'Foto':esAudio(a)?'Audio':'Archivo: '+a.nombre):'');
+function adjHTML(a){
+ if(!a)return '';let i=ADJ.indexOf(a);if(i<0)i=ADJ.push(a)-1;a.url=a.url||URL.createObjectURL(a.blob);
+ if(VISOR.tipo(a.nombre,a.blob.type)==='imagen')return `<img class="adj-img" src="${a.url}" alt="${esc(a.nombre)}" data-adj="${i}">`;
+ if(esAudio(a))return `<div class="adj-audio">${a.voz?'<small style="margin:0 0 4px;font-weight:700">Nota de voz</small>':`<small style="margin:0 0 4px">${esc(a.nombre)}</small>`}<audio controls preload="metadata" src="${a.url}"></audio></div>`;
+ return `<button type="button" class="adj-arch" data-adj="${i}">${ic('docs')}<span><b>${esc(a.nombre)}</b><small>${pesoTxt(a.blob.size)} · ver sin descargar</small></span></button>`;
+}
+const burbuja=(mia,t,f,a,extra='')=>`<div class="burbuja ${mia?'mia':''}">${extra}${adjHTML(a)}${t?esc(t):''}<small>${f}</small></div>`;
+function abrirAdj(e){const x=e.target.closest('[data-adj]');if(!x)return false;const a=ADJ[x.dataset.adj];VISOR.abrir({nombre:a.nombre,blob:a.blob});return true}
+const barraEscribir=(id,ph)=>`<form class="escribir" id="${id}"><label class="ico-adj" title="Mandar foto, audio o archivo" aria-label="Mandar foto, audio o archivo">${ic('clip')}<input type="file" hidden accept="image/*,audio/*,.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt"></label><button type="button" class="ico-adj grabar" title="Grabar nota de voz" aria-label="Grabar nota de voz">${ic('mic')}</button><input class="tx" placeholder="${ph}" autocomplete="off"><button class="btn" aria-label="Enviar">${ic('enviar','style="width:18px;height:18px;vertical-align:-3px"')}</button></form>`;
+function conectarEscribir(form,enviar){ // enviar(texto, adjunto|null)
+ const tx=form.querySelector('.tx');
+ form.onsubmit=e=>{e.preventDefault();const v=tx.value.trim();if(v)enviar(v,null)};
+ form.querySelector('input[type=file]').onchange=e=>{const f=e.target.files[0];if(!f)return;if(f.size>25*1048576)return alert('El archivo pesa más de 25 MB.');enviar(tx.value.trim(),{nombre:f.name,blob:f})};
+ const gb=form.querySelector('.grabar');
+ gb.onclick=async()=>{
+  if(GRAB.rec){GRAB.rec.stop();return}
+  if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return alert('Este navegador no deja grabar audio aquí. Puedes mandar un audio con el clip.');
+  let st;try{st=await navigator.mediaDevices.getUserMedia({audio:true})}catch(err){return alert('No se pudo usar el micrófono. Revisa que el navegador tenga permiso.')}
+  const rec=new MediaRecorder(st),partes=[],t0=Date.now(),ph=tx.placeholder;GRAB.rec=rec;GRAB.cancelar=false;
+  gb.classList.add('on');tx.disabled=true;
+  const tm=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);tx.placeholder=`Grabando ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')} · toca el micrófono para enviar`},250);
+  rec.ondataavailable=e=>partes.push(e.data);
+  rec.onstop=()=>{clearInterval(tm);st.getTracks().forEach(t=>t.stop());GRAB.rec=null;gb.classList.remove('on');tx.disabled=false;tx.placeholder=ph;
+   if(GRAB.cancelar)return;const blob=new Blob(partes,{type:rec.mimeType||'audio/webm'});if(blob.size<500)return;
+   enviar('',{nombre:'Nota de voz.'+(/mp4|aac/.test(blob.type)?'m4a':'webm'),blob,voz:true})};
+  rec.start();
+ };
 }
 
 // ---------- Visor de archivos (misma idea que en turbinas: vista previa sin descargar) ----------
@@ -799,7 +883,7 @@ function abrirEntregaG(g,t,m){
 // ----- Mensajes -----
 function pintarMensajesG(g){
  const gp=document.getElementById('gp'),sel=estadoProf.chat[g],A=ALUMNOS_G[g];
- const ult=h=>h.length?esc(h.at(-1)[1]).slice(0,30)+(h.at(-1)[1].length>30?'…':''):'';
+ const ult=h=>{if(!h.length)return '';const t=previaMsg(h.at(-1)[1],h.at(-1)[4]);return esc(t.slice(0,30))+(t.length>30?'…':'')};
  gp.innerHTML=`<div class="chat ${sel?'abierto':''}"><section class="tarjeta contactos"><h2>Mensajes</h2>
   <div class="lista"><div class="it ${sel==='grupo'?'activo':''}" data-d="grupo"><span class="avatar" style="width:40px;height:40px;font-size:12px;background:#145536">${g}</span><div class="t"><b>Todo el grupo ${g}</b><span>${MSG_GRUPO[g].length?ult(MSG_GRUPO[g]):'Aviso para los '+A.length+' alumnos'}</span></div></div>
   ${A.map(([m,nom])=>{const h=hiloInd(g,m);return `<div class="it ${sel===m?'activo':''}" data-d="${m}"><span class="avatar" style="width:40px;height:40px;font-size:12px;color:#fff;background:#8C7FA0">${inic(nom)}</span><div class="t"><b>${nom}</b><span>${ult(h)||'Sin mensajes'}</span></div>${sinLeer(g,m)?'<span class="punto">1</span>':''}</div>`}).join('')}</div></section>
@@ -808,16 +892,16 @@ function pintarMensajesG(g){
  if(!sel)cv.innerHTML=`<div class="vacio">${ic('msg')}Elige "Todo el grupo" para mandar un aviso a todos, o a un alumno para escribirle solo a él.</div>`;
  else{const h=sel==='grupo'?MSG_GRUPO[g]:hiloInd(g,sel);
   cv.innerHTML=`<div><button class="btn sec solo-movil" id="patras" style="padding:6px 10px;font-size:13px;margin-bottom:6px">← Mensajes</button><h2>${sel==='grupo'?'Todo el grupo '+g:nomAlumno(g,sel)}</h2><span style="font-size:13px;color:var(--gris)">${sel==='grupo'?`Lo reciben los ${A.length} alumnos`:'Mensaje privado'}</span></div>
-   <div class="burbujas" id="pbb">${h.length?h.map(([q,t,f])=>`<div class="burbuja ${q==='prof'?'mia':''}">${esc(t)}<small>${f}</small></div>`).join(''):'<div class="vacio">Todavía no hay mensajes.</div>'}</div>
-   <form class="escribir" id="pfm"><input id="ptx" placeholder="${sel==='grupo'?'Aviso para todo el grupo…':'Escribe tu mensaje…'}" autocomplete="off"><button class="btn" aria-label="Enviar">${ic('enviar','style="width:18px;height:18px;vertical-align:-3px"')}</button></form>`;
+   <div class="burbujas" id="pbb">${h.length?h.map(([q,t,f,,a])=>burbuja(q==='prof',t,f,a)).join(''):'<div class="vacio">Todavía no hay mensajes.</div>'}</div>
+   ${barraEscribir('pfm',sel==='grupo'?'Aviso para todo el grupo…':'Escribe tu mensaje…')}`;
   const bb=cv.querySelector('#pbb');bb.scrollTop=bb.scrollHeight}
- gp.onclick=e=>{const it=e.target.closest('[data-d]');if(it){estadoProf.chat[g]=it.dataset.d;pintarMensajesG(g)}if(e.target.id==='patras'){estadoProf.chat[g]=null;pintarMensajesG(g)}};
- const fm=gp.querySelector('#pfm');if(fm)fm.onsubmit=e=>{e.preventDefault();const v=gp.querySelector('#ptx').value.trim();if(!v)return;enviarProf(g,sel,v);pintarMensajesG(g);gp.querySelector('#ptx').focus()};
+ gp.onclick=e=>{if(abrirAdj(e))return;const it=e.target.closest('[data-d]');if(it){estadoProf.chat[g]=it.dataset.d;pintarMensajesG(g)}if(e.target.id==='patras'){estadoProf.chat[g]=null;pintarMensajesG(g)}};
+ const fm=gp.querySelector('#pfm');if(fm)conectarEscribir(fm,(v,a)=>{enviarProf(g,sel,v,a);pintarMensajesG(g);gp.querySelector('#pfm .tx').focus()});
 }
 
 // ----- Calificaciones y estadísticas -----
 function pintarCalifG(g){
- const gp=document.getElementById('gp'),st=estadoProf.cal[g]||(estadoProf.cal[g]={vista:'sem',orden:'prom',busca:'',editar:false}),w=PONDER[g],A=ALUMNOS_G[g];
+ const gp=document.getElementById('gp'),st=estadoProf.cal[g]||(estadoProf.cal[g]={vista:'sem',orden:'prom',busca:'',editar:false}),w=pond(g),A=ALUMNOS_G[g];
  const filas=A.map(([m,nom])=>{const ps=CAL.parciales.map(p=>calcParcial(g,m,p.n));return {m,nom,ps,sem:calcSemestre(g,m)}});
  const valor=f=>st.vista==='sem'?f.sem:f.ps[+st.vista.slice(1)-1].final;
  const vals=filas.map(valor).filter(x=>x!=null),promG=prom2(vals);
@@ -827,45 +911,60 @@ function pintarCalifG(g){
  ver.sort(st.orden==='nombre'?(a,b)=>a.nom.localeCompare(b.nom):st.orden==='riesgo'?(a,b)=>(valor(a)??999)-(valor(b)??999):(a,b)=>(valor(b)??-1)-(valor(a)??-1));
  const enCurso=n=>!(yaPaso(CAL.parciales[n-1].examen));
  const num=(v,d=0)=>v==null?'—':(+v).toFixed(d);
- const cab=st.vista==='sem'?`<th class="num">P1</th><th class="num">P2</th><th class="num">P3</th><th class="num">Promedio</th>`:`<th class="num ocultar-movil">Trabajos</th><th class="num ocultar-movil">Asist.</th><th class="num ocultar-movil">Examen</th><th class="num">Calif.</th>`;
- const celdas=f=>{if(st.vista==='sem')return f.ps.map((p,i)=>`<td class="num">${p.final==null?`<span style="color:var(--gris);font-size:12px">${enCurso(i+1)?'en curso':'—'}</span>`:num(p.final,1)}</td>`).join('')+`<td class="num"><b style="color:${colorNota(f.sem)}">${num(f.sem,1)}</b></td>`;
+ const cab=st.vista==='sem'?`<th class="num">P1</th><th class="num">P2</th><th class="num">P3</th>${w.final?`<th class="num">Final</th>`:''}<th class="num">Promedio</th>`:`<th class="num ocultar-movil">Trabajos</th><th class="num ocultar-movil">Asist.</th><th class="num ocultar-movil">Examen</th><th class="num">Calif.</th>`;
+ const celdas=f=>{if(st.vista==='sem')return f.ps.map((p,i)=>`<td class="num">${p.final==null?`<span style="color:var(--gris);font-size:12px">${enCurso(i+1)?'en curso':'—'}</span>`:p.abierto?`<span style="color:var(--gris)">${num(p.final,1)}<br><span style="font-size:11px">en curso</span></span>`:num(p.final,1)}</td>`).join('')+(w.final?`<td class="num">${EXAMENES[g][f.m]?.final??`<span style="color:var(--gris);font-size:12px">${fCorta(EXAMEN_FINAL)}</span>`}</td>`:'')+`<td class="num"><b style="color:${colorNota(f.sem)}">${num(f.sem,1)}</b></td>`;
   const p=f.ps[+st.vista.slice(1)-1];return `<td class="num ocultar-movil">${num(p.trab)}</td><td class="num ocultar-movil">${p.asis==null?'—':num(p.asis)+' %'}</td><td class="num ocultar-movil">${num(p.exam)}</td><td class="num"><b style="color:${colorNota(p.final)}">${p.final==null?'<span style="color:var(--gris);font-size:12px;font-weight:600">falta examen</span>':num(p.final,1)}</b></td>`};
  gp.innerHTML=`
-  <section class="tarjeta"><div class="fila"><div><h2>Cómo califico a este grupo</h2><span style="font-size:13px;color:var(--gris)">Trabajos ${w.trab} % · Asistencia ${w.asis} % · Examen ${w.exam} %</span></div><button class="btn sec" id="cedit" style="padding:8px 12px;font-size:13px">${st.editar?'Cerrar':'Cambiar'}</button></div>
-   ${st.editar?`<div class="rapidas"><button data-pre="20,10,70">Rectoría: 30 % trabajos y asistencia, 70 % examen</button><button data-pre="0,0,100">Solo examen</button><button data-pre="40,10,50">Mitad y mitad</button></div>
-   <div class="form"><label>Trabajos %<input id="pw1" type="number" min="0" max="100" value="${w.trab}"></label><label>Asistencia %<input id="pw2" type="number" min="0" max="100" value="${w.asis}"></label><label>Examen %<input id="pw3" type="number" min="0" max="100" value="${w.exam}"></label></div>
-   <span id="psuma" style="font-size:12px;color:var(--gris)">La suma debe dar 100 %. Cátedra libre: cada profesor decide.</span><button class="btn" id="paplicar">Aplicar</button>`:''}</section>
+  <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><div style="flex:1;min-width:220px"><h2>Cómo califico a este grupo</h2><span style="font-size:13px;color:var(--gris)">${resumenW(w)}</span></div>${PONDER[g]?'<span class="chip aviso">Personalizada por ti</span>':'<span class="chip ok">Recomendación de dirección</span>'}<button class="btn sec" id="cedit" style="padding:8px 12px;font-size:13px">${st.editar?'Cerrar':'Cambiar'}</button></div>
+   ${st.editar?`<span style="font-size:13px;color:var(--gris)">Dirección recomienda: ${resumenW(DIRECCION)}. Tienes libertad de cátedra: si no la cambias, se usa la de dirección.</span>
+   <div class="rapidas"><button data-pre="20,10,70,0">La de dirección (30 / 70)</button><button data-pre="0,0,100,0">Solo exámenes</button><button data-pre="20,10,70,40">Parciales + examen final 40 %</button><button data-pre="90,10,0,50">Trabajos y un solo examen final</button></div>
+   <b style="font-size:13px">Dentro de cada parcial (deben sumar 100 %)</b>
+   <div class="form"><label>Trabajos %<input id="pw1" type="number" min="0" max="100" value="${w.trab}"></label><label>Asistencia %<input id="pw2" type="number" min="0" max="100" value="${w.asis}"></label><label>Examen del parcial %<input id="pw3" type="number" min="0" max="100" value="${w.exam}"></label></div>
+   <label>Examen final: cuánto vale del semestre (0 = sin examen final)<input id="pw4" type="number" min="0" max="100" value="${w.final}" style="max-width:220px"></label>
+   <b style="font-size:13px">¿A qué grupos se aplica?</b>
+   <div class="rapidas" id="palc"><button data-a="uno" class="on">Solo al grupo ${g}</button><button data-a="todos">A todos mis grupos (${GRUPOS_PROF.map(x=>x.id).join(', ')})</button></div>
+   <span id="psuma" style="font-size:12px;color:var(--gris)">Los alumnos ven cómo se les califica en cada materia.</span>
+   <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="paplicar">Aplicar</button>${PONDER[g]?'<button class="btn sec" id="pdir">Volver a la de dirección</button>':''}</div>`:''}</section>
   <div class="tabs" id="cv">${[['p1','Parcial 1'],['p2','Parcial 2'],['p3','Parcial 3'],['sem','Semestre']].map(([k,t])=>`<button data-v="${k}" class="${st.vista===k?'activo':''}">${t}${k!=='sem'&&enCurso(+k[1])?' · en curso':''}</button>`).join('')}</div>
   <div class="rejilla">
    <section class="tarjeta dato"><small>Promedio del grupo</small><b>${num(promG,1)}</b><span>${vals.length} de ${A.length} con calificación</span></section>
    <section class="tarjeta dato"><small>Mejor promedio</small><b>${mejor?num(valor(mejor),1):'—'}</b><span>${mejor?mejor.nom:'Aún sin datos'}</span></section>
    <section class="tarjeta dato"><small>Aprobados (${CAL.minima} o más)</small><b>${vals.filter(v=>v>=CAL.minima).length}/${vals.length}</b><span>${vals.filter(v=>v<70).length} en riesgo (menos de 70)</span></section>
-  </div>
-  <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><input id="cbusca" placeholder="Buscar alumno o matrícula" value="${esc(st.busca)}" style="flex:1;min-width:180px"><div class="tabs" id="cord">${[['prom','Mejor promedio'],['riesgo','En riesgo primero'],['nombre','Nombre']].map(([k,t])=>`<button data-o="${k}" class="${st.orden===k?'activo':''}" style="background:${st.orden===k?'':'var(--suave)'}">${t}</button>`).join('')}</div></div>
+  </div>${st.vista==='sem'&&w.final&&!yaPaso(EXAMEN_FINAL)?`<span style="font-size:13px;color:var(--gris)">El examen final (${w.final} %) se aplica el ${EXAMEN_FINAL}. Mientras, el promedio es el de los parciales cerrados.</span>`:''}
+  <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><input id="cbusca" placeholder="Buscar alumno o matrícula" value="${esc(st.busca)}" style="flex:1;min-width:180px"><div class="tabs" id="cord">${[['prom','Mejor promedio'],['riesgo','En riesgo primero'],['nombre','Nombre']].map(([k,t])=>`<button data-o="${k}" class="suave ${st.orden===k?'activo':''}">${t}</button>`).join('')}</div></div>
    <table><thead><tr><th>#</th><th>Alumno</th>${cab}</tr></thead><tbody>${ver.map(f=>`<tr data-al="${f.m}" style="cursor:pointer"><td style="color:var(--gris)">${rank.indexOf(f.m)+1||'—'}</td><td>${f.nom}<br><span style="font-size:12px;color:var(--gris)">${f.m} · ver desglose</span></td>${celdas(f)}</tr>`).join('')||`<tr><td colspan="6" class="vacio">Nadie coincide con “${esc(st.busca)}”.</td></tr>`}</tbody></table></section>`;
  const q=gp.querySelector('#cbusca');q.oninput=()=>{st.busca=q.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();const pos=q.selectionStart;pintarCalifG(g);const q2=gp.querySelector('#cbusca');q2.focus();q2.setSelectionRange(pos,pos)};
  gp.onclick=e=>{
   if(e.target.id==='cedit'){st.editar=!st.editar;return pintarCalifG(g)}
-  const pre=e.target.closest('[data-pre]');if(pre){const [a,b,c]=pre.dataset.pre.split(',');gp.querySelector('#pw1').value=a;gp.querySelector('#pw2').value=b;gp.querySelector('#pw3').value=c}
-  if(e.target.id==='paplicar'){const v=['#pw1','#pw2','#pw3'].map(x=>Number(gp.querySelector(x).value)||0);if(v.reduce((a,b)=>a+b,0)!==100){gp.querySelector('#psuma').style.color='var(--mal)';gp.querySelector('#psuma').textContent=`La suma da ${v.reduce((a,b)=>a+b,0)} %. Tiene que dar 100 %.`;return}
-   PONDER[g]={trab:v[0],asis:v[1],exam:v[2]};st.editar=false;return pintarCalifG(g)}
+  const pre=e.target.closest('[data-pre]');if(pre){pre.dataset.pre.split(',').forEach((v,i)=>gp.querySelector('#pw'+(i+1)).value=v)}
+  const al=e.target.closest('#palc button');if(al)gp.querySelectorAll('#palc button').forEach(x=>x.classList.toggle('on',x===al));
+  if(e.target.id==='pdir'){delete PONDER[g];st.editar=false;return pintarCalifG(g)}
+  if(e.target.id==='paplicar'){const v=['#pw1','#pw2','#pw3','#pw4'].map(x=>Number(gp.querySelector(x).value)||0),sm=v[0]+v[1]+v[2],ps=gp.querySelector('#psuma');
+   if(sm!==100){ps.style.color='var(--mal)';ps.textContent=`Dentro del parcial la suma da ${sm} %. Tiene que dar 100 %.`;return}
+   if(v[3]<0||v[3]>100){ps.style.color='var(--mal)';ps.textContent='El examen final debe valer entre 0 y 100 %.';return}
+   const nw={trab:v[0],asis:v[1],exam:v[2],final:v[3]},igual=Object.keys(nw).every(k=>nw[k]===DIRECCION[k]);
+   const todos=gp.querySelector('#palc .on').dataset.a==='todos';
+   (todos?GRUPOS_PROF.map(x=>x.id):[g]).forEach(id=>{if(igual)delete PONDER[id];else PONDER[id]={...nw}});
+   st.editar=false;pintarCalifG(g);if(todos)alert('Listo: se aplicó a todos tus grupos.');return}
   const vb=e.target.closest('#cv button');if(vb){st.vista=vb.dataset.v;return pintarCalifG(g)}
   const ob=e.target.closest('#cord button');if(ob){st.orden=ob.dataset.o;return pintarCalifG(g)}
   const tr=e.target.closest('[data-al]');if(tr)detalleAlumno(g,tr.dataset.al);
  };
 }
 function detalleAlumno(g,m){
- const w=PONDER[g],nom=nomAlumno(g,m),num=(v,d=0)=>v==null?'—':(+v).toFixed(d);
- const bloque=p=>{const c=calcParcial(g,m,p.n),cuenta=(v,k)=>v==null||!w[k]?'':` → ${num(v*w[k]/100,1)}`;
-  return `<section class="tarjeta" style="box-shadow:none;border:1px solid var(--linea)"><div class="fila"><h2>Parcial ${p.n}</h2><b class="nota" style="color:${colorNota(c.final)}">${c.final==null?'<span style="font-size:13px;color:var(--gris)">en curso</span>':num(c.final,1)}</b></div>
+ const w=pond(g),nom=nomAlumno(g,m),num=(v,d=0)=>v==null?'—':(+v).toFixed(d);
+ const bloque=p=>{const c=calcParcial(g,m,p.n),cuenta=(v,k)=>v==null?'':!w[k]?' · <span style="color:var(--gris)">no cuenta</span>':` → ${num(v*w[k]/100,1)}`;
+  return `<section class="tarjeta" style="box-shadow:none;border:1px solid var(--linea)"><div class="fila"><h2>Parcial ${p.n}${c.abierto?' <span class="chip" style="vertical-align:3px">en curso</span>':''}</h2><b class="nota" style="color:${colorNota(c.final)}">${c.final==null?'<span style="font-size:13px;color:var(--gris)">pendiente</span>':num(c.final,1)}</b></div>
    <div class="campo"><small>Trabajos (${w.trab} %)</small>${num(c.trab)} de promedio · entregó ${c.ent} de ${c.total}${c.pend?` · ${c.pend} por calificar`:''}${c.falt?` · <b style="color:var(--mal)">${c.falt} sin entregar (cuentan 0)</b>`:''}${cuenta(c.trab,'trab')}</div>
    <div class="campo"><small>Asistencia (${w.asis} %)</small>${c.asis==null?'—':num(c.asis)+' %'} · ${c.P} presente${c.P!==1?'s':''}, ${c.R} retardo${c.R!==1?'s':''}, ${c.F} falta${c.F!==1?'s':''} de ${c.ses} clases${cuenta(c.asis,'asis')}</div>
    <div class="campo"><small>Examen (${w.exam} %)</small>${c.exam==null?`Se aplica el ${p.examen}`:num(c.exam)}${cuenta(c.exam,'exam')}</div></section>`};
  const sem=calcSemestre(g,m);
  const d=document.createElement('div');d.className='visor-fondo';
  d.innerHTML=`<div class="detalle"><div class="fila"><div><span style="font-size:12px;color:var(--gris)">Grupo ${g} · ${nomMat(grupoDe(g).cl)} · ${m}</span><h2>${nom}</h2></div><button class="btn sec" id="dcerrar" aria-label="Cerrar" style="padding:8px 10px">${ic('cerrar','style="width:18px;height:18px;vertical-align:-4px"')}</button></div>
-  <div class="hero" style="background:linear-gradient(135deg,#1F5F45,#145536);padding:16px"><p>Promedio del semestre (parciales cerrados)</p><h2>${num(sem,1)}</h2><p>${sem==null?'Sin parciales cerrados':sem>=CAL.minima?'Va aprobando':'Va reprobando'}</p></div>
+  <div class="hero" style="background:linear-gradient(135deg,#1F5F45,#145536);padding:16px"><p>Promedio del semestre (solo parciales cerrados)</p><h2>${num(sem,1)}</h2><p>${sem==null?'Sin parciales cerrados':sem>=CAL.minima?'Va aprobando':'Va reprobando'}</p></div>
   ${CAL.parciales.map(bloque).join('')}
+  ${w.final?(()=>{const ps=CAL.parciales.map(p=>calcParcial(g,m,p.n).final).filter(x=>x!=null),pp=prom2(ps),ef=EXAMENES[g][m]?.final;return `<section class="tarjeta" style="box-shadow:none;border:1px solid var(--linea)"><div class="fila"><h2>Examen final</h2><b class="nota">${ef??'<span style="font-size:13px;color:var(--gris)">pendiente</span>'}</b></div>
+   <div class="campo"><small>Cómo se calcula el semestre</small>Promedio de parciales ${num(pp,1)} × ${100-w.final} % ${pp==null?'':'= '+num(pp*(100-w.final)/100,1)} · Examen final × ${w.final} % ${ef==null?`(se aplica el ${EXAMEN_FINAL})`:'= '+num(ef*w.final/100,1)}</div></section>`})():''}
   <button class="btn sec" id="dmsg">${ic('msg','style="width:16px;height:16px;vertical-align:-3px;margin-right:6px"')}Enviarle un mensaje</button></div>`;
  d.onclick=e=>{if(e.target===d||e.target.closest('#dcerrar'))d.remove();if(e.target.closest('#dmsg')){d.remove();estadoProf.chat[g]=m;location.hash=`#prof-g/${g}/mensajes`}};
  document.body.appendChild(d);
@@ -913,6 +1012,7 @@ function pintarKardex(ciclo){
 
 function pintar(){
  let r=(location.hash||'').slice(1)||'inicio';
+ if(GRAB.rec){GRAB.cancelar=true;GRAB.rec.stop()}
  VISOR.cerrar();document.querySelector('.menu-g')?.remove();document.querySelectorAll('.visor-fondo').forEach(x=>x.remove());
  if(r.startsWith('prof-'))return pintarProf(r);
  const def=RUTAS.find(x=>x[0]===r)||RUTAS[0];
@@ -925,6 +1025,17 @@ function pintar(){
  if(def[0]==='mensajes'){pintarMensajes();document.getElementById('cc').onclick=e=>{const it=e.target.closest('[data-cl]');if(it){chatSel=it.dataset.cl;pintarMensajes()}}}
  if(def[0]==='horario'){pintarHorario(bloqueActual().nombre);document.getElementById('hb').onclick=e=>{const b=e.target.closest('button');if(b)pintarHorario(b.dataset.b)}}
  document.title=def[1]+' · miescuela.com';
+}
+// Portada que se desvanece al bajar y barra superior con sombra
+addEventListener('scroll',()=>{const y=scrollY,p=document.getElementById('portada');
+ if(p){p.style.opacity=Math.max(0,1-y/280);p.style.transform=`translateY(${y*.35}px) scale(${Math.max(.9,1-y/2200)})`}
+ document.querySelector('.barra')?.classList.toggle('sombra',y>8)},{passive:true});
+// Secciones que aparecen suavemente al llegar a ellas
+let observador=null;
+function revelar(){
+ if(!('IntersectionObserver' in window)||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+ observador?.disconnect();observador=new IntersectionObserver(es=>es.forEach(x=>{if(x.isIntersecting){x.target.classList.add('visto');observador.unobserve(x.target)}}),{threshold:.08});
+ document.querySelectorAll('main > *:not(#portada)').forEach((el,i)=>{el.classList.add('revela');el.style.transitionDelay=Math.min(i,5)*60+'ms';observador.observe(el)});
 }
 addEventListener('hashchange',pintar);
 pintar();

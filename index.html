@@ -235,6 +235,18 @@ input.cap{width:72px;padding:6px 8px;text-align:right;border-radius:8px}
 .interruptor i::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s}
 .interruptor input:checked+i{background:#0E6E8C}.interruptor input:checked+i::after{transform:translateX(18px)}
 .interruptor input:focus-visible+i{outline:2px solid #0E6E8C;outline-offset:2px}
+.prof .btn{background:#1F5F45}.prof .btn.sec{background:#E8F2EC;color:#1F5F45}
+.notas-g{display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start}
+.notas-g .it{flex-wrap:wrap}
+.admin .lateral .logo b,.admin .avatar{background:#1D2B4F}
+.admin .nav a.activo,.admin .btn{background:#1D2B4F}.admin .btn.sec{background:#E6EAF3;color:#1D2B4F}
+.admin .tabs button.activo{background:#1D2B4F}
+.cuentas-demo{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--linea);padding-top:12px}
+.cuentas-demo>span{font-size:12px;color:var(--gris)}.cuentas-demo code{background:var(--suave);padding:1px 6px;border-radius:6px;color:var(--marca);font-weight:700}
+.cuentas-demo small{font-size:11px;font-weight:700;color:var(--gris);text-transform:uppercase;letter-spacing:.05em;margin-top:6px}
+.cuentas-demo div{display:flex;flex-wrap:wrap;gap:6px}
+.cuentas-demo button{border:0;background:var(--suave);color:var(--marca);border-radius:10px;padding:7px 10px;font-size:13px;font-weight:600}
+@media (hover:hover){.cuentas-demo button:hover{background:var(--marca);color:#fff}}
 .solo-movil{display:none}
 .inferior{display:none}
 .hoja-fondo{position:fixed;inset:0;background:rgba(28,20,38,.4);z-index:20;display:flex;align-items:flex-end;justify-content:center}
@@ -263,6 +275,9 @@ input.cap{width:72px;padding:6px 8px;text-align:right;border-radius:8px}
   .rubro .rf{grid-column:1/-1;grid-row:2}
   .visor-fondo{padding:0;align-items:stretch}
   .prof .barra{background:#145536}
+  .admin .barra{background:#1D2B4F}
+  .notas-g{grid-template-columns:1fr}
+  .admin .barra .avatar{color:#1D2B4F;background:#fff}
   .padre .barra{background:#0A4D63}
   .padre .barra .avatar{color:#0E6E8C;background:#fff}
   .semana-asis{gap:4px}.semana-asis>*{padding:10px 2px}
@@ -522,7 +537,7 @@ function marco(ruta,titulo,html){
  const nav=[];let g='';
  for(const [k,t,i,gr] of lista){if(gr!==g){g=gr;nav.push(`<div class="grupo">${gr}</div>`)}nav.push(`<a href="#${k}" class="${k===ruta||k.startsWith(ruta+'/')?'activo':''}">${ic(i)}${t}</a>`)}
  const inf=prof?[['prof-horario','Horario','reloj'],['prof-grupos','Grupos','perfil']]:padre?[['padres','Resumen','inicio'],['padres-escuela','Escuela','calif'],['padres-mensajes','Mensajes','msg']]:[['inicio','Inicio','inicio'],['actividades','Tareas','act'],['mensajes','Mensajes','msg'],['calificaciones','Calif.','calif']];
- const cambio=prof||padre?`<a class="modo" href="#inicio">${ic('cambio')}Volver a la vista del alumno</a>`:`<a class="modo" href="#prof-horario">${ic('cambio')}Ver como profesor (demo)</a><a class="modo" href="#padres">${ic('cambio')}Ver como padre de familia (demo)</a>`;
+ const cambio=prof||padre?`<a class="modo" href="#inicio">${ic('cambio')}Volver a la vista del alumno</a>`:`${typeof conCuentas==='function'&&conCuentas()?`<a class="modo" href="#entrar" style="border-style:solid;background:var(--suave)">${ic('perfil')}Entrar con una cuenta</a>`:''}<a class="modo" href="#prof-horario">${ic('cambio')}Ver como profesor (demo)</a><a class="modo" href="#padres">${ic('cambio')}Ver como padre de familia (demo)</a>`;
  document.getElementById('raiz').innerHTML=`
  <div class="app ${prof?'prof':''} ${padre?'padre':''}">
   <aside class="lateral"><div class="logo"><b>me</b><span>miescuela.com</span></div><nav class="nav">${nav.join('')}</nav>${cambio}</aside>
@@ -1251,7 +1266,8 @@ function pintarKardex(ciclo){
 }
 
 function pintar(){
- let r=(location.hash||'').slice(1)||'inicio';
+ let r=(location.hash||'').slice(1)||(typeof conCuentas==='function'&&conCuentas()?'entrar':'inicio');
+ if(r==='entrar'||r==='salir-c'||r==='c'||r.startsWith('c/'))return window.pintarConectado?pintarConectado(r):null;
  if(GRAB.rec){GRAB.cancelar=true;GRAB.rec.stop()}
  VISOR.cerrar();document.querySelector('.menu-g')?.remove();document.querySelectorAll('.visor-fondo').forEach(x=>x.remove());
  if(r.startsWith('prof-'))return pintarProf(r);
@@ -1279,7 +1295,10 @@ function revelar(){
  document.querySelectorAll('main > *:not(#portada)').forEach((el,i)=>{el.classList.add('revela');el.style.transitionDelay=Math.min(i,5)*60+'ms';observador.observe(el)});
 }
 addEventListener('hashchange',pintar);
-pintar();
+// Se pinta cuando ya cargaron config.js y conectado.js
+if(document.readyState==='loading')addEventListener('DOMContentLoaded',pintar);else pintar();
 </script>
+<script src="config.js"></script>
+<script src="conectado.js"></script>
 </body>
 </html>

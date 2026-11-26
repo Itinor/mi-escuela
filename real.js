@@ -33,10 +33,11 @@ function fechasGrupo(g) {
 }
 function prepararCal(grupos, cal, nivel) {
   vaciar(CAL.inhabiles);
-  const mios = cal.filter(c => !c.nivel || !nivel || c.nivel === nivel);
+  const gs = new Set(grupos.map(g => g.id)), matDe = id => { const g = grupos.find(x => x.id === id); return g ? materiaDe(g) : ''; };
+  const mios = cal.filter(c => c.grupo_id ? gs.has(c.grupo_id) : (!c.nivel || !nivel || c.nivel === nivel));
   for (const c of mios) if (c.tipo === 'sin_clase') for (const d = deIso(c.fecha), f = deIso(c.fecha_fin || c.fecha); d <= f; d.setDate(d.getDate() + 1)) CAL.inhabiles[fTxt(d)] = c.titulo;
   if (grupos.length) { CAL.inicio = dIso(grupos.map(g => g.inicio).sort()[0]); CAL.fin = dIso(grupos.map(g => g.fin).sort().at(-1)); }
-  reemplazar(EVENTOS_CAL, mios.map(c => ({f: deIso(c.fecha), fin: deIso(c.fecha_fin || c.fecha), tipo: c.tipo, titulo: c.titulo, desc: c.descripcion || '', nivel: c.nivel})).sort((a, b) => a.f - b.f));
+  reemplazar(EVENTOS_CAL, mios.map(c => ({id: c.id, f: deIso(c.fecha), fin: deIso(c.fecha_fin || c.fecha), tipo: c.tipo, titulo: c.grupo_id && grupos.length > 1 ? `${matDe(c.grupo_id)}: ${c.titulo}` : c.titulo, desc: c.descripcion || '', nivel: c.nivel, grupo: c.grupo_id || null})).sort((a, b) => a.f - b.f));
 }
 
 // Llena las estructuras de la plataforma (alumnos, lista, tareas, exámenes, forma de calificar) para unos grupos.
@@ -132,6 +133,8 @@ async function cargarDeAlumno(alumno) {
     if (ult && ult.ciclo === '2SEM/2026') { ult.actual = true; ult.materias.push(...actuales); } else lista.push({ciclo: '2SEM/2026', sem: (ult?.sem || 0) + 1, actual: true, materias: actuales});
     reemplazar(CICLOS, lista);
   } else reemplazar(CICLOS, [{ciclo: '2026-2027', sem: 1, actual: true, materias: actuales}]);
+  REAL.comentarios = {};
+  if (REAL.rol === 'alumno') for (const x of await L('mensajes', {tarea_id: TAREAS.map(t => t.id)}, {orden: 'creado_en'})) (REAL.comentarios[x.tarea_id] ??= []).push(x);
   cerrados = CICLOS.filter(c => !c.actual);
   promGeneral = prom(cerrados.flatMap(c => c.materias.map(x => x[3])));
   actual = CICLOS.find(c => c.actual);
@@ -145,9 +148,9 @@ async function cargarAlumno(yo) {
   const uni = yo.nivel === 'universidad', mayor = (edad(yo.fecha_nacimiento) ?? 0) >= 18;
   Object.assign(ALUMNO, {nombre: yo.nombre, iniciales: iniciales(yo.nombre), matricula: yo.usuario || ''});
   if (!uni) Object.assign(ALUMNO, {carrera: NIVELES[yo.nivel], turno: 'Matutino', ciclo: '2026-2027', semestre: null, grado: yo.grado});
-  REAL.verPagos = mayor;       // menores de edad: los pagos los ven (y se les recuerdan a) sus papás
-  REAL.rutas = uni ? ['inicio', 'calificaciones', 'kardex', 'horario', 'faltas', 'actividades', 'mensajes', 'calendario', 'pagos', 'documentos', 'trayectoria', 'perfil']
-    : ['inicio', 'calificaciones', 'horario', 'faltas', 'actividades', ...(yo.nivel === 'primaria' ? [] : ['mensajes']), 'calendario', ...(mayor ? ['pagos'] : []), 'perfil'];
+  REAL.verPagos = mayor;       // menores de edad (aunque estén en universidad): pagos y datos fiscales los ven sus papás
+  REAL.chatDirecto = ['bachillerato', 'universidad'].includes(yo.nivel);   // primaria y secundaria: avisos del grupo y comentarios en tareas
+  REAL.rutas = ['inicio', 'calificaciones', ...(uni ? ['kardex'] : []), 'horario', 'faltas', 'actividades', 'mensajes', 'calendario', ...(mayor ? ['pagos'] : []), ...(uni ? ['documentos', 'trayectoria'] : []), 'perfil'];
 }
 
 async function cargarPadre(yo) {
@@ -185,6 +188,8 @@ async function cargarProfesor(yo) {
     const alumno = x.de === yo.id ? x.para : x.de;
     for (const g of grupos) if (ALUMNOS_G[g.id].some(a => a[0] === alumno)) (MSG_IND[g.id][alumno] ??= []).push([x.de === yo.id ? 'prof' : 'alumno', x.texto || '', fyh(x.creado_en), null, null]);
   }
+  REAL.comentarios = {};
+  for (const x of [...recibidos, ...enviados].filter(x => x.tarea_id).sort((a, b) => new Date(a.creado_en) - new Date(b.creado_en))) (REAL.comentarios[x.tarea_id] ??= []).push(x);
   Object.assign(PROFE, {nombre: yo.nombre, iniciales: iniciales(yo.nombre), cl: claveDe(grupos[0] || {}), grupo: grupos[0]?.id, titulo: titulo(yo.nombre)});
   const t = PROFE.titulo;
   reemplazar(RUTAS_PROF, [['prof-horario', 'Mi horario', 'reloj', t], ['prof-grupos', 'Mis grupos', 'perfil', t], ['prof-calendario', 'Calendario escolar', 'cal', t],
@@ -236,6 +241,10 @@ Object.assign(PERSISTIR, {
 // ---------- Piezas de pantalla ----------
 const avisosSinLeer = () => REAL.avisos.filter(a => !REAL.leidos.has(a.id));
 const avisosHTML = () => { const av = avisosSinLeer(); return av.length ? `<section class="tarjeta" style="border:2px solid var(--aviso)">${av.map(a => `<div class="fila" style="align-items:flex-start"><div><span class="chip aviso">${a.nivel ? 'Aviso de ' + NIVELES[a.nivel].toLowerCase() : 'Aviso de la escuela'}</span><p style="margin:8px 0 2px"><b>${esc(a.titulo)}.</b> ${esc(a.texto)}</p><span style="font-size:12px;color:var(--gris)">${hora(a.creado_en)}</span></div><button class="btn" data-enterado-r="${a.id}" style="padding:8px 12px;font-size:13px;white-space:nowrap">Enterado</button></div>`).join('')}</section>` : ''; };
+const examenesProximos = (dias = 10) => { const h = hoy0(), l = new Date(h); l.setDate(h.getDate() + dias); return EVENTOS_CAL.filter(e => e.tipo === 'examen' && e.fin >= h && e.f <= l); };
+const examenesHTML = quien => { const ex = examenesProximos(); if (!ex.length) return '';
+  return `<section class="tarjeta" style="border:2px solid var(--aviso)"><div class="fila"><h2>${ex.length > 1 ? 'Exámenes próximos' : 'Examen próximo'}</h2><span class="chip aviso">Recordatorio</span></div><div class="lista">${ex.map(e => { const d = Math.round((e.f - hoy0()) / 864e5);
+    return `<div class="it"><span class="chip aviso" style="padding:6px 8px;min-width:58px;justify-content:center">${d <= 0 ? 'Hoy' : d === 1 ? 'Mañana' : 'En ' + d + ' días'}</span><div class="t"><b>${esc(e.titulo)}</b><span>${rangoTxt(e)}${e.desc ? ' · ' + esc(e.desc) : ''}</span></div></div>`; }).join('')}</div>${quien ? `<span style="font-size:12px;color:var(--gris)">${quien}</span>` : ''}</section>`; };
 const proximosEventos = n => EVENTOS_CAL.filter(e => e.fin >= hoy0() && !['inicio'].includes(e.tipo)).slice(0, n);
 const rangoTxt = e => e.fin > e.f ? `Del ${e.f.getDate()} ${MESES[e.f.getMonth()]} al ${e.fin.getDate()} ${MESES[e.fin.getMonth()]}` : `${DIAS[e.f.getDay() || 7] || 'Domingo'} ${e.f.getDate()} ${MESES[e.f.getMonth()]}`;
 const eventoIt = e => `<div class="it"><span class="chip ${e.tipo === 'examen' ? 'aviso' : e.tipo === 'sin_clase' ? '' : 'ok'}" style="padding:6px 8px;min-width:58px;justify-content:center">${e.f.getDate()} ${MESES[e.f.getMonth()]}</span><div class="t"><b>${esc(e.titulo)}</b><span>${TIPO_EV[e.tipo][0]} · ${rangoTxt(e)}${e.desc ? ' · ' + esc(e.desc) : ''}</span></div></div>`;
@@ -278,6 +287,7 @@ V.inicio = () => {
   return `
   <section class="hero portada" id="portada"><span class="formas" aria-hidden="true"><i></i><i></i><i></i></span><p>${nino ? '¡Hola' : 'Hola'},</p><h2>${esc(yo.nombre.split(' ')[0])}${nino ? '!' : ''}</h2><p>${uni ? `${ALUMNO.carrera} · ${ALUMNO.semestre}.º semestre · ${ALUMNO.turno}` : `${NIVELES[yo.nivel]} · ${esc(yo.grado || '')} · ${esc(REAL.grupos.find(g => !g.id.includes('-'))?.nombre || '')}`}</p><p style="font-size:12px;margin-top:6px">${uni ? 'Matrícula' : 'Usuario'} ${esc(ALUMNO.matricula)}</p></section>
   ${avisosHTML()}
+  ${examenesHTML()}
   <div class="rejilla">
    ${uni ? `<a class="tarjeta dato" href="#kardex" style="color:inherit"><small>Promedio general</small><b>${fmt(Math.round(promGeneral * 100) / 100)}</b><span>${cerrados.length} semestres cerrados</span></a>` : ''}
    <a class="tarjeta dato" href="#calificaciones" style="color:inherit"><small>${uni ? 'Este semestre' : 'Promedio del ciclo'}</small><b>${pa == null ? '—' : fmt(Math.round(pa * 10) / 10)}</b><span>${capt} de ${actual.materias.length} materias con calificación</span></a>
@@ -352,22 +362,78 @@ V.calendario = () => {
 const tarjetaOrig = tarjetaTarea;
 tarjetaTarea = t => {
   let h = tarjetaOrig(t);
-  if (REAL && REAL.rol === 'alumno' && REAL.nivel === 'primaria') {
-    h = h.replace(/<label class="btn"[\s\S]*?<\/label>/, '').replace(/<a class="btn sec" href="#mensajes"[\s\S]*?<\/a>/, '');
+  if (!REAL || REAL.rol !== 'alumno') return h;
+  if (REAL.nivel === 'primaria') {
+    h = h.replace(/<label class="btn"[\s\S]*?<\/label>/, '');
     if (t.estado === 'pendiente') h = h.replace('<div class="acc">', '<span class="meta">Entrégala en tu salón; tu maestro la marca aquí.</span><div class="acc">');
   }
-  return h;
+  if (!REAL.chatDirecto) h = h.replace(/<a class="btn sec" href="#mensajes"[\s\S]*?<\/a>/, '');
+  const cs = REAL.comentarios[t.id] || [], prof = REAL.profes[REAL.grupos.find(g => g.id === t.grupo)?.profesor_id];
+  if (!cs.length) return prof ? h.replace(/<\/article>\s*$/, `<details class="coments"><summary>${ic('msg', 'style="width:14px;height:14px;vertical-align:-2px"')} Dejar un comentario a ${esc(prof.nombre)}</summary><form class="escribir" data-coment="${t.id}"><input class="tx" placeholder="Escribe tu duda o comentario…" maxlength="500" aria-label="Comentario sobre la tarea"><button class="btn" type="submit" style="padding:8px 12px;font-size:13px">Enviar</button></form></details></article>`) : h;
+  const hilo = `<div class="coments"><b style="font-size:13px">Comentarios con ${esc(prof?.nombre || 'tu maestro')}</b>
+    ${cs.map(c => `<div class="burbuja ${c.de === C.yo.id ? 'mia' : ''}" style="max-width:100%">${esc(c.texto || '')}<small>${hora(c.creado_en)}</small></div>`).join('')}
+    ${prof ? `<form class="escribir" data-coment="${t.id}"><input class="tx" placeholder="${cs.length ? 'Responder…' : 'Escribe una duda o comentario para tu maestro…'}" maxlength="500" aria-label="Comentario sobre la tarea"><button class="btn" type="submit" style="padding:8px 12px;font-size:13px">Enviar</button></form>` : ''}</div>`;
+  return h.replace(/<\/article>\s*$/, hilo + '</article>');
 };
 
 // Mensajes con la base (alumno): mismo chat con fotos, audio y notas de voz.
 const pmOrig = pintarMensajes;
 pintarMensajes = function () {
   if (!REAL) return pmOrig();
+  if (!REAL.chatDirecto) return avisosDeClase(document.getElementById('mc'));
   if (chatSel) { const g = REAL.grupos.find(x => claveDe(x) === chatSel); if (g?.profesor_id) chatC = g.profesor_id; chatSel = null; }
   return vMensajes('mensajes', null, document.getElementById('mc'));
 };
 
+// Avisos de cada clase: el maestro escribe al grupo; el alumno los lee (las dudas van en los comentarios de cada tarea).
+let grupoAvisos = null;
+async function avisosDeClase(cont) {
+  if (!cont.querySelector('.chat')) cont.innerHTML = `<div class="vacio">${ic('reloj')}Cargando…</div>`;
+  const gs = REAL.grupos.filter(g => g.profesor_id), msgs = await L('mensajes', {grupo_id: gs.map(g => g.id), para: null}, {orden: 'creado_en'});
+  if (!gs.some(g => g.id === grupoAvisos)) grupoAvisos = innerWidth > 820 ? (gs.find(g => msgs.some(m => m.grupo_id === g.id)) || gs[0])?.id : null;
+  const g = gs.find(x => x.id === grupoAvisos), hilo = g ? msgs.filter(m => m.grupo_id === g.id) : [];
+  const ult = id => { const m = msgs.filter(x => x.grupo_id === id).at(-1); return m ? esc(previaMsg(m.texto, m.adjunto_nombre ? {nombre: m.adjunto_nombre, blob: {type: m.adjunto_tipo || ''}} : null).slice(0, 34)) : 'Sin avisos'; };
+  cont.innerHTML = `<div class="chat ${g ? 'abierto' : ''}"><section class="tarjeta contactos"><h2>Avisos de mis clases</h2><span style="font-size:13px;color:var(--gris)">Lo que tus maestros le escriben a todo el grupo.</span>
+    <div class="lista">${gs.map(x => `<div class="it ${x.id === grupoAvisos ? 'activo' : ''}" data-ga="${x.id}"><span class="avatar" style="width:40px;height:40px;font-size:12px">${iniciales(REAL.profes[x.profesor_id]?.nombre || '?')}</span><div class="t"><b>${esc(MAT[claveDe(x)])}</b><span>${esc(REAL.profes[x.profesor_id]?.nombre || '')} · ${ult(x.id)}</span></div></div>`).join('')}</div></section>
+   <section class="tarjeta conversacion">${g ? `<div><button class="btn sec solo-movil" id="gatras" style="padding:6px 10px;font-size:13px;margin-bottom:6px">← Clases</button><h2>${esc(MAT[claveDe(g)])}</h2><span style="font-size:13px;color:var(--gris)">${esc(REAL.profes[g.profesor_id]?.nombre || '')} · para todo el grupo</span></div>
+    <div class="burbujas" id="gbb">${hilo.length ? (await Promise.all(hilo.map(m => burbujaC(m, C.yo)))).join('') : '<div class="vacio">Tu maestro todavía no manda avisos en esta clase.</div>'}</div>
+    <div class="campo" style="font-size:13px">Solo tu maestro escribe aquí. Si tienes una duda sobre una tarea, escríbela en los comentarios de esa tarea. <a href="#actividades" style="font-weight:600">Ir a tareas</a></div>` : `<div class="vacio">${ic('msg')}Elige una clase para ver sus avisos.</div>`}</section></div>`;
+  const bb = cont.querySelector('#gbb'); if (bb) bb.scrollTop = bb.scrollHeight;
+  cont.onclick = e => { const it = e.target.closest('[data-ga]'); if (it) { grupoAvisos = it.dataset.ga; return avisosDeClase(cont); }
+    if (e.target.id === 'gatras') { grupoAvisos = null; cont.querySelector('.chat').classList.remove('abierto'); }
+    const a = e.target.closest('[data-adj-url]'); if (a) VISOR.abrir({nombre: a.dataset.n, url: a.dataset.adjUrl}); };
+}
+
 // ---------- Profesor ----------
+// En Tareas: fechas de examen del grupo (las ve el alumno en su calendario y sus papás) y comentarios de los alumnos en cada tarea.
+const ptgOrig = pintarTareasG;
+pintarTareasG = function (g) {
+  ptgOrig(g);
+  if (!REAL || REAL.rol !== 'profesor') return;
+  const gp = document.getElementById('gp'), tid = estadoProf.tarea[g];
+  if (tid === 'nueva') return;
+  if (tid) {
+    const cs = REAL.comentarios[tid] || [], porAlumno = {};
+    cs.forEach(c => { const a = c.de === C.yo.id ? c.para : c.de; (porAlumno[a] ??= []).push(c); });
+    const sec = document.createElement('section'); sec.className = 'tarjeta';
+    sec.innerHTML = `<div class="fila"><h2>Comentarios de alumnos</h2><span class="chip">${Object.keys(porAlumno).length}</span></div>${Object.entries(porAlumno).map(([a, l]) => `<div class="coments"><b style="font-size:13px">${esc(nomAlumno(g, a) || 'Alumno')}</b>${l.map(c => `<div class="burbuja ${c.de === C.yo.id ? 'mia' : ''}" style="max-width:100%">${esc(c.texto || '')}<small>${hora(c.creado_en)}</small></div>`).join('')}<form class="escribir" data-coment="${tid}" data-para="${a}"><input class="tx" placeholder="Responder a ${esc((nomAlumno(g, a) || '').split(' ')[0])}…" maxlength="500"><button class="btn" type="submit" style="padding:8px 12px;font-size:13px">Enviar</button></form></div>`).join('') || '<div class="vacio">Nadie ha comentado en esta tarea. Las dudas que dejen los alumnos aparecen aquí.</div>'}`;
+    gp.appendChild(sec); return;
+  }
+  const hoy = hoy0(), ex = EVENTOS_CAL.filter(e => e.grupo === g && e.fin >= hoy);
+  const sec = document.createElement('section'); sec.className = 'tarjeta';
+  sec.innerHTML = `<div class="fila"><div><h2>Fechas de examen</h2><span style="font-size:13px;color:var(--gris)">Los alumnos y sus papás las ven en su calendario y reciben el recordatorio unos días antes.</span></div><button class="btn sec" id="exnueva" style="padding:9px 14px;font-size:13px">+ Poner fecha</button></div>
+   <form id="exf" class="oculto" style="display:flex;flex-direction:column;gap:10px"><div class="form"><label>Fecha<input type="date" id="exd" required min="${aIso(fTxt(hoy))}"></label><label>Qué es<input id="ext" required value="Examen" placeholder="Ej. Examen del bloque 3"></label></div><label>Detalle (opcional)<input id="exx" placeholder="Ej. Temas 4 y 5 · traer calculadora"></label><button class="btn" type="submit">Guardar fecha</button></form>
+   <div class="lista">${ex.map(e => `<div class="it"><span class="chip aviso" style="padding:6px 8px;min-width:58px;justify-content:center">${fCorta(fTxt(e.f))}</span><div class="t"><b>${esc(e.titulo)}</b><span>${rangoTxt(e)}${e.desc ? ' · ' + esc(e.desc) : ''}</span></div><button class="btn sec" data-quita-ex="${e.id}" style="padding:6px 10px;font-size:12px">Quitar</button></div>`).join('') || '<span style="font-size:13px;color:var(--gris)">Sin exámenes programados.</span>'}</div>`;
+  gp.prepend(sec);
+  sec.querySelector('#exnueva').onclick = () => sec.querySelector('#exf').classList.toggle('oculto');
+  sec.querySelector('#exf').onsubmit = async e => { e.preventDefault(); const G = REAL.grupos.find(x => x.id === g);
+    try { const [c] = await db().insertar('calendario', [{nivel: G.nivel, grupo_id: g, tipo: 'examen', fecha: sec.querySelector('#exd').value, titulo: sec.querySelector('#ext').value.trim(), descripcion: sec.querySelector('#exx').value.trim() || null, creado_por: C.yo.id}]);
+      EVENTOS_CAL.push({id: c.id, f: deIso(c.fecha), fin: deIso(c.fecha), tipo: 'examen', titulo: c.titulo, desc: c.descripcion || '', nivel: c.nivel, grupo: g}); EVENTOS_CAL.sort((a, b) => a.f - b.f); pintarTareasG(g); }
+    catch (x) { alert('No se pudo guardar: ' + x.message); } };
+  sec.onclick = async e => { const q = e.target.closest('[data-quita-ex]'); if (!q || !confirm('¿Quitar esta fecha? Dejará de verse en el calendario de los alumnos.')) return;
+    try { await db().borrar('calendario', {id: +q.dataset.quitaEx}); reemplazar(EVENTOS_CAL, EVENTOS_CAL.filter(x => x.id !== +q.dataset.quitaEx)); pintarTareasG(g); } catch (x) { alert('No se pudo quitar: ' + x.message); } };
+};
+
 const pmgOrig = pintarMensajesG;
 pintarMensajesG = function (g) {
   if (!REAL) return pmgOrig(g);
@@ -432,6 +498,7 @@ function padresReal() {
   return `
   <section class="hero portada" id="portada" style="background:linear-gradient(135deg,#0E6E8C,#0A4D63)"><span class="formas" aria-hidden="true"><i></i><i></i><i></i></span><p>${esc(FAMILIA.parentesco)} de</p><h2>${esc(HIJA.nombre)}</h2><p>${HIJA.nivel} · ${esc(HIJA.grado)} · ${esc(HIJA.grupo)}${HIJA.tutor ? ' · ' + (kinder || h.nivel === 'primaria' ? 'Titular: ' : 'Tutor(a): ') + esc(HIJA.tutor) : ''}</p></section>
   ${avisosHTML()}
+  ${examenesHTML(`Los pone su maestro en el calendario; ${esc(REAL.hijo.nombre.split(' ')[0])} también los ve en su cuenta.`)}
   ${ad.total ? `<a class="tarjeta" href="#padres-pagos" style="border:2px solid var(--mal);color:inherit"><div class="fila" style="align-items:flex-start"><div><span class="chip mal">Pago vencido</span><p style="margin:8px 0 2px">${ad.venc.map(p => esc(p.concepto)).join(', ')} · <b>${pesos(ad.total)}</b></p><span style="font-size:12px;color:var(--gris)">Venció el ${dIso(ad.venc[0].vence)}. Págalo desde Colegiaturas para evitar recargos.</span></div><span class="btn" style="padding:8px 12px;font-size:13px;white-space:nowrap">Ver pagos</span></div></a>` : ''}
   <div class="rejilla">
    <section class="tarjeta dato"><small>Hoy</small><b style="font-size:24px;color:${hoyTxt2.c}">${hoyTxt2.t}</b><span>${esc(hoyTxt2.s)}</span></section>
@@ -486,6 +553,17 @@ pintarPadres = function (r) {
   document.title = def[1] + ' · Familia · miescuela.com';
 };
 
+document.addEventListener('submit', async e => {
+  const f = e.target.closest('form[data-coment]'); if (!f || !REAL) return;
+  e.preventDefault(); const tx = f.querySelector('.tx'), texto = tx.value.trim(); if (!texto) return;
+  const tid = +f.dataset.coment, para = f.dataset.para || REAL.profes[REAL.grupos.find(g => g.id === TAREAS.find(t => t.id === tid)?.grupo)?.profesor_id]?.id;
+  if (!para) return; f.querySelector('button').disabled = true;
+  try { const [m] = await db().insertar('mensajes', [{de: C.yo.id, para, texto, tarea_id: tid}]); (REAL.comentarios[tid] ??= []).push({...m, creado_en: m.creado_en || new Date().toISOString()});
+    if (REAL.rol === 'profesor') { const g = location.hash.split('/')[1]; pintarTareasG(g); }
+    else { const y = scrollY; pintarTareas(document.querySelector('#tt .activo')?.dataset.f || 'pendiente'); scrollTo(0, y); }
+  } catch (x) { alert('No se pudo enviar: ' + x.message); f.querySelector('button').disabled = false; }
+});
+
 // ---------- Clics comunes (avisos, calendario, pagos, detalle de calificación) ----------
 document.addEventListener('click', async e => {
   if (!REAL) return;
@@ -505,6 +583,12 @@ window.guardaReal = r => {
   if (REAL.rol === 'profesor') { const p = r.split('/'); return ['prof-horario', 'prof-grupos', 'prof-calendario'].includes(r) || (p[0] === 'prof-g' && grupoDe(p[1])) ? r : 'prof-horario'; }
   return REAL.rutas.includes(r) ? r : casa();
 };
+function mostrarError(x) {
+  document.getElementById('raiz').innerHTML = `<div class="login"><div class="tarjeta" style="max-width:460px;display:flex;flex-direction:column;gap:12px"><h2>Algo falló al abrir tu cuenta</h2>
+   <span style="font-size:14px;color:var(--gris)">Mándale este mensaje a quien te ayuda con la plataforma:</span><code style="background:var(--fondo);padding:10px;border-radius:10px;font-size:12px;white-space:pre-wrap">${esc(String(x?.stack || x?.message || x)).slice(0, 600)}</code>
+   <a class="btn" href="#" onclick="location.reload();return false" style="text-align:center">Volver a intentar</a><a class="btn sec" href="#salir-c" style="text-align:center">Salir</a></div></div>`;
+}
+addEventListener('error', e => { if (REAL && !document.querySelector('main')) mostrarError(e.error || e.message); });
 function pantallaCarga(yo) {
   document.getElementById('raiz').innerHTML = `<div class="login"><div style="color:#fff;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center"><div class="logo" style="justify-content:center"><b style="background:#fff;color:var(--marca)">me</b><span>miescuela.com</span></div><span style="opacity:.85">Preparando lo de ${esc(yo.nombre.split(' ')[0])}…</span></div></div>`;
 }
@@ -514,7 +598,7 @@ async function entrarReal(yo, r) {
   try { await cargaEnCurso; } catch (x) { cargaEnCurso = null; REAL = null; return vistaEntrar('No se pudo cargar tu información: ' + (x.message || x)); }
   const destino = r && !(r === 'entrar' || r === 'c' || r.startsWith('c/')) ? guardaReal(r) : casa();
   if (location.hash !== '#' + destino) history.replaceState(null, '', '#' + destino);
-  pintar();
+  try { pintar(); } catch (x) { console.error(x); mostrarError(x); }
 }
 const pcOrig = pintarConectado;
 window.pintarConectado = async r => {

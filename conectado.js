@@ -266,7 +266,7 @@ async function burbujaC(m, yo) {
       : /^audio\//.test(tipo) ? `<div class="adj-audio">${/^Nota de voz/.test(m.adjunto_nombre) ? '<small style="margin:0 0 4px;font-weight:700">Nota de voz</small>' : ''}<audio controls preload="metadata" src="${url}"></audio></div>`
       : `<button type="button" class="adj-arch" data-adj-url="${esc(url)}" data-n="${esc(m.adjunto_nombre)}">${ic('docs')}<span><b>${esc(m.adjunto_nombre)}</b><small>ver sin descargar</small></span></button>`;
   }
-  return `<div class="burbuja ${m.de === yo.id ? 'mia' : ''}">${m.grupo_id && !m.para ? '<small style="font-weight:700;margin:0 0 2px">Para todo el grupo</small>' : ''}${adj}${m.texto ? esc(m.texto) : ''}<small>${hora(m.creado_en)}</small></div>`;
+  return `<div class="burbuja ${m.de === yo.id ? 'mia' : ''}">${m.grupo_id && !m.para ? '<small style="font-weight:700;margin:0 0 2px">Para todo el grupo</small>' : m.tarea_id ? '<small style="font-weight:700;margin:0 0 2px">Comentario en una tarea</small>' : ''}${adj}${m.texto ? esc(m.texto) : ''}<small>${hora(m.creado_en)}</small></div>`;
 }
 async function vMensajes(ruta, grupoProf, cont) {
   const yo = C.yo, propio = !!cont;

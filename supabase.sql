@@ -105,6 +105,7 @@ create table public.mensajes (
   adjunto_ruta   text,
   adjunto_nombre text,
   adjunto_tipo   text,
+  tarea_id       bigint references public.tareas(id) on delete cascade,   -- comentario sobre una tarea
   creado_en      timestamptz not null default now(),
   check (para is not null or grupo_id is not null),
   check (coalesce(length(texto),0) > 0 or adjunto_ruta is not null)
@@ -163,6 +164,7 @@ create table public.calendario (
   tipo        text not null check (tipo in ('sin_clase','examen','evento','junta','inicio','fin')),
   titulo      text not null,
   descripcion text,
+  grupo_id    text references public.grupos(id) on delete cascade,   -- con grupo: fecha que pone el profesor (ej. su examen)
   creado_por  uuid references public.personas(id) on delete set null
 );
 
@@ -245,8 +247,11 @@ alter table public.pagos enable row level security;
 alter table public.historial enable row level security;
 
 -- El calendario escolar lo ve toda la comunidad; solo administración lo cambia.
-create policy "ver calendario" on public.calendario for select to authenticated using (true);
+create policy "ver calendario" on public.calendario for select to authenticated using (grupo_id is null or public.ve_grupo(grupo_id));
 create policy "admin maneja calendario" on public.calendario for all to authenticated using (public.es_admin()) with check (public.es_admin());
+-- El profesor pone las fechas de sus grupos (exámenes, entregas importantes) y las puede quitar.
+create policy "profesor pone fechas de su grupo" on public.calendario for insert to authenticated with check (grupo_id is not null and public.da_clase(grupo_id) and creado_por = public.mi_persona());
+create policy "profesor quita fechas de su grupo" on public.calendario for delete to authenticated using (grupo_id is not null and public.da_clase(grupo_id));
 -- Pagos: el alumno, sus papás (si están autorizados) y administración.
 create policy "ver pagos" on public.pagos for select to authenticated using (public.es_admin() or alumno_id = public.mi_persona() or public.es_tutor_de(alumno_id));
 create policy "admin maneja pagos" on public.pagos for all to authenticated using (public.es_admin()) with check (public.es_admin());
@@ -301,9 +306,12 @@ create policy "profesor califica" on public.entregas for update to authenticated
 create policy "ver mensajes" on public.mensajes for select to authenticated using (
   de = public.mi_persona() or para = public.mi_persona() or public.es_admin()
   or (para is null and grupo_id is not null and public.ve_grupo(grupo_id)));
+-- Alumnos de primaria y secundaria: no hay chat directo con el profesor; solo comentarios dentro de una tarea.
+create or replace function public.solo_por_tarea() returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce((select rol = 'alumno' and nivel in ('primaria','secundaria') from public.personas where auth_id = auth.uid()), false) $$;
 create policy "mandar mensajes" on public.mensajes for insert to authenticated with check (
   de = public.mi_persona() and (
-    (para is not null and public.puede_escribir_a(para))
+    (para is not null and public.puede_escribir_a(para) and (tarea_id is not null or not public.solo_por_tarea()))
     or (para is null and grupo_id is not null and (public.da_clase(grupo_id) or public.es_admin()))));
 
 create policy "ver anotaciones" on public.anotaciones for select to authenticated using (
@@ -393,6 +401,8 @@ create or replace function pg_temp.grupo(p_id text, p_nombre text, p_nivel text,
 language sql as $$ insert into public.grupos (id, nombre, nivel, materia, clave, profesor_id, horario, aula, inicio, fin) values (p_id, p_nombre, p_nivel, p_materia, p_clave, p_prof, p_horario::jsonb, p_aula, p_inicio, p_fin) $$;
 create or replace function pg_temp.profe_sin_cuenta(p_nombre text, p_nivel text, p_materia text) returns uuid
 language sql as $$ insert into public.personas (rol, nivel, nombre, grado) values ('profesor', p_nivel, p_nombre, p_materia) returning id $$;
+-- Si la fecha cae en fin de semana, se pasa al lunes.
+create or replace function pg_temp.habil(d date) returns date language sql as $$ select d + case extract(isodow from d)::int when 6 then 2 when 7 then 1 else 0 end $$;
 -- Días de lunes a viernes con el mismo horario
 create or replace function pg_temp.lv(dias int[], ini text, fin text) returns text language sql as $$
   select json_agg(json_build_object('dia', d, 'inicio', ini, 'fin', fin))::text from unnest(dias) d $$;
@@ -601,12 +611,26 @@ begin
    (adm, 'Festival navideño', 'El festival de kinder será el 11 de diciembre a las 10:00. Traer el disfraz el día anterior.', 'kinder', now() - interval '3 days'),
    (adm, 'Exámenes del tercer parcial', 'Del 7 al 11 de diciembre. Revisen el calendario de cada materia.', 'bachillerato', now() - interval '2 days');
 
+  -- Fechas que ponen los profesores en sus grupos.
+  insert into public.calendario (nivel, fecha, tipo, titulo, descripcion, grupo_id, creado_por) values
+   ('primaria', pg_temp.habil(current_date + 5), 'examen', 'Examen de fracciones', 'Traer regla y lápiz', 'P4B', tp),
+   ('secundaria', pg_temp.habil(current_date + 3), 'examen', 'Examen de ecuaciones lineales', 'Temas 4 y 5 del cuaderno', 'S2C', ts),
+   ('bachillerato', pg_temp.habil(current_date + 6), 'examen', 'Examen de estequiometría', 'Se permite calculadora; traer tabla periódica', 'B3A', tb),
+   ('universidad', date '2026-12-05', 'examen', 'Examen final: etapas del proceso penal', 'Aula 14 · 11:00', 'UA3', tu);
+
   -- Mensajes de ejemplo.
   insert into public.mensajes (de, para, grupo_id, texto, creado_en) values
    (tu, null, 'UA3', 'Buen día, grupo. Ya quedó publicado el ensayo de etapas del proceso penal. Cualquier duda, escríbanme por aquí.', now() - interval '3 days'),
    (tk, mk, null, 'Buenas tardes, mamá de Pedro. Hoy estuvo muy contento en la clase de música.', now() - interval '2 days'),
    (tb, mb, null, 'Buenas tardes. Pedro va muy bien; solo le recomiendo repasar estequiometría antes del examen.', now() - interval '2 days'),
-   (mb, tb, null, 'Gracias, maestra. ¿Hay asesorías de Química antes del examen?', now() - interval '1 day');
+   (mb, tb, null, 'Gracias, maestra. ¿Hay asesorías de Química antes del examen?', now() - interval '1 day'),
+   (tp, null, 'P4B', 'Niños: recuerden que el examen de fracciones es la próxima semana. Repasen los ejercicios del cuaderno.', now() - interval '1 day'),
+   (ts, null, 'S2C', 'Recuerden que ya está activa la tarea "Repaso para el examen". La pueden entregar hasta el jueves.', now() - interval '20 hours'),
+   (tb, null, 'B3A', 'Grupo: el examen de estequiometría incluye balanceo. Mañana resolvemos dudas en clase.', now() - interval '5 hours');
+  insert into public.mensajes (de, para, texto, tarea_id, creado_en)
+   select ps, ts, 'Maestra, ¿el repaso se entrega en hojas blancas o en el cuaderno?', t.id, now() - interval '6 hours' from public.tareas t where t.grupo_id = 'S2C' order by t.entrega desc limit 1;
+  insert into public.mensajes (de, para, texto, tarea_id, creado_en)
+   select ts, ps, 'En hojas blancas, Pedro, con tu nombre arriba.', t.id, now() - interval '4 hours' from public.tareas t where t.grupo_id = 'S2C' order by t.entrega desc limit 1;
 end $$;
 
 -- Que la API de Supabase vea de inmediato las tablas nuevas (calendario, pagos, historial…).

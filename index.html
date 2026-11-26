@@ -84,6 +84,11 @@ td.num,th.num{text-align:right}
 .cal span.examen{background:var(--avisof);color:var(--aviso);font-weight:700}
 .cal span.evento,.cal span.junta,.cal span.inicio,.cal span.fin{background:var(--suave);color:var(--marca);font-weight:700}
 .cal span.hoy.sin,.cal span.hoy.examen,.cal span.hoy.evento,.cal span.hoy.junta{background:var(--marca);color:#fff;text-decoration:none}
+.coments{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--linea);padding-top:10px;margin-top:4px}
+.coments .escribir{margin-top:2px}
+.coments summary{cursor:pointer;color:var(--marca);font-size:13px;font-weight:600;list-style:none}
+.coments summary::-webkit-details-marker{display:none}
+details.coments[open] summary{margin-bottom:4px}
 .leyenda-cal{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--gris)}
 .leyenda-cal i{display:inline-block;width:12px;height:12px;border-radius:4px;vertical-align:-2px;margin-right:4px}
 .form{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
@@ -1337,8 +1342,8 @@ addEventListener('hashchange',pintar);
 const arranque=()=>window.arrancar?arrancar():pintar();
 if(document.readyState==='loading')addEventListener('DOMContentLoaded',arranque);else arranque();
 </script>
-<script src="config.js"></script>
-<script src="conectado.js"></script>
-<script src="real.js"></script>
+<script src="config.js?v=20261126b"></script>
+<script src="conectado.js?v=20261126b"></script>
+<script src="real.js?v=20261126b"></script>
 </body>
 </html>

@@ -3,7 +3,7 @@
 // Si se dejan vacíos, la página funciona como demostración sin cuentas.
 window.CONFIG = {
   supabase: {
-    url: '',
-    clave: ''
+    url: 'https://qvrfajjxoptueyvjemmv.supabase.co',
+    clave: 'sb_publishable_smfv87xDjAdTbhXgCK47aw_OZd8Axlb'
   }
 };

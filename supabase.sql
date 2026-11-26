@@ -280,6 +280,12 @@ create policy "profesor captura" on public.capturas for insert to authenticated 
 create policy "profesor corrige captura" on public.capturas for update to authenticated using (public.da_clase(grupo_id)) with check (public.da_clase(grupo_id));
 create policy "profesor borra captura" on public.capturas for delete to authenticated using (public.da_clase(grupo_id));
 
+-- Para que la pantalla de entrada sepa si ya se corrió este archivo (solo devuelve cuántas cuentas hay).
+create or replace function public.estado_demo() returns int language sql stable security definer set search_path = public as $$
+  select count(*)::int from public.personas where auth_id is not null $$;
+grant usage on schema public to anon;
+grant execute on function public.estado_demo() to anon;
+
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 revoke all on all tables in schema public from anon;

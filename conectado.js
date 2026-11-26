@@ -26,7 +26,9 @@ function crearDBReal() {
     async actualizar(t, cambios, f) { const c = await SB.iniciar(); return ok(await filtrar(c.from(t).update(cambios), f).select()); },
     async borrar(t, f) { const c = await SB.iniciar(); return ok(await filtrar(c.from(t).delete(), f)); },
     async subir(b, ruta, archivo) { const c = await SB.iniciar(); const {error} = await c.storage.from(b).upload(ruta, archivo, {upsert: true, contentType: archivo.type || undefined}); if (error) throw error; },
-    async url(b, ruta) { const c = await SB.iniciar(); const {data, error} = await c.storage.from(b).createSignedUrl(ruta, 3600); if (error) throw error; return data.signedUrl; }
+    async url(b, ruta) { const c = await SB.iniciar(); const {data, error} = await c.storage.from(b).createSignedUrl(ruta, 3600); if (error) throw error; return data.signedUrl; },
+    // ¿Ya se corrió supabase.sql? Devuelve cuántas cuentas hay, o null si la base está vacía.
+    async diagnostico() { const c = await SB.iniciar(); const {data, error} = await c.rpc('estado_demo'); return error ? null : data; }
   };
 }
 const conCuentas = () => !!(window.__DB_PRUEBA__ || (window.CONFIG?.supabase?.url && CONFIG.supabase.clave));
@@ -71,18 +73,22 @@ function vistaEntrar(msg) {
    <label>Contraseña<input id="ep" type="password" autocomplete="current-password" required></label>
    <button class="btn" type="submit" id="eb">Entrar</button>
    <p id="eerr" role="alert" style="margin:0;color:var(--mal);font-size:13px">${msg ? esc(msg) : ''}</p>
-   <div class="cuentas-demo"><b>Cuentas de prueba</b><span>Contraseña de todas: <code>Demo2026</code>. Toca una para llenar los datos.</span>
+   <div class="cuentas-demo"><b>Cuentas de prueba</b><span>Toca una y entras directo. Si prefieres escribirla, la contraseña de todas es <code>Demo2026</code>.</span>
     ${CUENTAS_DEMO.map(([g, cs]) => `<small>${g}</small><div>${cs.map(([u, t]) => `<button type="button" data-u="${u}">${t}</button>`).join('')}</div>`).join('')}
    </div>
    <a href="#inicio" style="font-size:13px;text-align:center">Ver la demostración sin cuenta</a>
    <p class="aviso-proto">Prototipo · todas las personas y datos son ficticios</p>
   </form></div>`;
   const f = document.getElementById('fe');
-  f.onclick = e => { const b = e.target.closest('[data-u]'); if (b) { f.querySelector('#eu').value = b.dataset.u; f.querySelector('#ep').value = 'Demo2026'; f.querySelector('#eb').focus(); } };
+  f.onclick = e => { const b = e.target.closest('[data-u]'); if (b) { f.querySelector('#eu').value = b.dataset.u; f.querySelector('#ep').value = 'Demo2026'; f.requestSubmit(); } };
   f.onsubmit = async e => {
     e.preventDefault(); const b = f.querySelector('#eb'), err = f.querySelector('#eerr'); b.disabled = true; b.textContent = 'Entrando…'; err.textContent = '';
     try { await db().entrar(f.querySelector('#eu').value, f.querySelector('#ep').value); C.yo = null; C.cache = {}; location.hash = '#c'; if (location.hash === '#c') pintarConectado('c'); }
-    catch (x) { err.textContent = /invalid/i.test(x.message || '') ? 'Usuario o contraseña incorrectos.' : 'No se pudo entrar: ' + (x.message || x); b.disabled = false; b.textContent = 'Entrar'; }
+    catch (x) {
+      let msg = 'No se pudo entrar: ' + (x.message || x);
+      if (/invalid/i.test(x.message || '')) { const n = db().diagnostico ? await db().diagnostico().catch(() => null) : 1;
+        msg = !n ? 'La base de datos todavía no tiene las cuentas: falta pegar y correr supabase.sql en el SQL Editor de Supabase.' : 'Usuario o contraseña incorrectos.'; }
+      err.textContent = msg; b.disabled = false; b.textContent = 'Entrar'; }
   };
 }
 async function quienSoy() {

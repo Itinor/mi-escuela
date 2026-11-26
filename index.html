@@ -215,6 +215,24 @@ a.tarjeta{transition:transform .22s ease,box-shadow .22s ease}
 .mini-btn{border:0;background:var(--suave);color:var(--marca);border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;margin-top:4px}
 .prof .mini-btn{color:#1F5F45}
 input.cap{width:72px;padding:6px 8px;text-align:right;border-radius:8px}
+.padre .lateral .logo b,.padre .avatar{background:#0E6E8C}
+.padre .nav a.activo{background:#0E6E8C}
+.padre .btn{background:#0E6E8C}.padre .btn.sec{background:#E3F1F5;color:#0E6E8C}
+.padre .burbuja.mia{background:#0E6E8C}
+@media (hover:hover){.padre .btn.sec:hover{background:#0E6E8C;color:#fff;box-shadow:0 8px 18px rgba(14,110,140,.28)}}
+.semana-asis{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.semana-asis div{border-radius:14px;padding:12px 6px;text-align:center;display:flex;flex-direction:column;gap:2px;background:var(--fondo)}
+.semana-asis b{font-size:13px}.semana-asis span{font:700 16px 'Space Grotesk',sans-serif}.semana-asis small{font-size:11px;color:var(--gris)}
+.semana-asis .ok{background:var(--okf)}.semana-asis .ok small{color:var(--ok)}
+.semana-asis .aviso{background:var(--avisof)}.semana-asis .aviso small{color:var(--aviso)}
+.semana-asis .mal{background:var(--malf)}.semana-asis .mal small{color:var(--mal)}
+.semana-asis .fut span{color:#B8AFC4}
+.interruptor{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--linea);color:var(--tinta);font-size:14px;font-weight:500;cursor:pointer}
+.interruptor input{position:absolute;opacity:0;width:1px;height:1px}
+.interruptor i{width:44px;height:26px;border-radius:999px;background:#D9D2E3;position:relative;flex:none;transition:background .2s}
+.interruptor i::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s}
+.interruptor input:checked+i{background:#0E6E8C}.interruptor input:checked+i::after{transform:translateX(18px)}
+.interruptor input:focus-visible+i{outline:2px solid #0E6E8C;outline-offset:2px}
 .solo-movil{display:none}
 .inferior{display:none}
 .hoja-fondo{position:fixed;inset:0;background:rgba(28,20,38,.4);z-index:20;display:flex;align-items:flex-end;justify-content:center}
@@ -243,6 +261,9 @@ input.cap{width:72px;padding:6px 8px;text-align:right;border-radius:8px}
   .rubro .rf{grid-column:1/-1;grid-row:2}
   .visor-fondo{padding:0;align-items:stretch}
   .prof .barra{background:#145536}
+  .padre .barra{background:#0A4D63}
+  .padre .barra .avatar{color:#0E6E8C;background:#fff}
+  .semana-asis{gap:4px}.semana-asis div{padding:10px 2px}
   .detalle{border-radius:0;max-height:100%;height:100%;max-width:none}
   .prof .barra .avatar{color:#145536;background:#fff}
   .visor{border-radius:0;height:100%}
@@ -493,21 +514,21 @@ const fmt=n=>n==null?'—':(Number.isInteger(n)?String(n):n.toFixed(2));
 const colorNota=n=>n==null?'':n>=90?'var(--ok)':n>=80?'var(--tinta)':n>=70?'var(--aviso)':'var(--mal)';
 
 function marco(ruta,titulo,html){
- const prof=ruta.startsWith('prof-'),lista=prof?RUTAS_PROF:RUTAS;
+ const prof=ruta.startsWith('prof-'),padre=ruta.startsWith('padres'),lista=prof?RUTAS_PROF:padre?RUTAS_PADRES:RUTAS;
  const nav=[];let g='';
  for(const [k,t,i,gr] of lista){if(gr!==g){g=gr;nav.push(`<div class="grupo">${gr}</div>`)}nav.push(`<a href="#${k}" class="${k===ruta||k.startsWith(ruta+'/')?'activo':''}">${ic(i)}${t}</a>`)}
- const inf=prof?[['prof-horario','Horario','reloj'],['prof-grupos','Grupos','perfil']]:[['inicio','Inicio','inicio'],['actividades','Tareas','act'],['mensajes','Mensajes','msg'],['calificaciones','Calif.','calif']];
- const cambio=prof?`<a class="modo" href="#inicio">${ic('cambio')}Volver a la vista del alumno</a>`:`<a class="modo" href="#prof-horario">${ic('cambio')}Ver como profesor (demo)</a>`;
+ const inf=prof?[['prof-horario','Horario','reloj'],['prof-grupos','Grupos','perfil']]:padre?[['padres','Resumen','inicio'],['padres-escuela','Escuela','calif'],['padres-mensajes','Mensajes','msg']]:[['inicio','Inicio','inicio'],['actividades','Tareas','act'],['mensajes','Mensajes','msg'],['calificaciones','Calif.','calif']];
+ const cambio=prof||padre?`<a class="modo" href="#inicio">${ic('cambio')}Volver a la vista del alumno</a>`:`<a class="modo" href="#prof-horario">${ic('cambio')}Ver como profesor (demo)</a><a class="modo" href="#padres">${ic('cambio')}Ver como padre de familia (demo)</a>`;
  document.getElementById('raiz').innerHTML=`
- <div class="app ${prof?'prof':''}">
+ <div class="app ${prof?'prof':''} ${padre?'padre':''}">
   <aside class="lateral"><div class="logo"><b>me</b><span>miescuela.com</span></div><nav class="nav">${nav.join('')}</nav>${cambio}</aside>
   <div class="cuerpo">
-   <header class="barra"><h1>${titulo}</h1>${prof?`<span class="yo"><span class="avatar">${PROFE.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${PROFE.nombre} · Profesora</span></span>`:`<a class="yo" href="#perfil" aria-label="Mis datos"><span class="avatar">${ALUMNO.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${ALUMNO.nombre}</span></a>`}</header>
+   <header class="barra"><h1>${titulo}</h1>${padre?`<span class="yo"><span class="avatar">${FAMILIA.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${FAMILIA.nombre} · ${FAMILIA.parentesco} de ${HIJA.nombre.split(' ')[0]}</span></span>`:prof?`<span class="yo"><span class="avatar">${PROFE.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${PROFE.nombre} · Profesora</span></span>`:`<a class="yo" href="#perfil" aria-label="Mis datos"><span class="avatar">${ALUMNO.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${ALUMNO.nombre}</span></a>`}</header>
    <main>${html}</main>
   </div>
  </div>
- <nav class="inferior">${inf.map(([k,t,i])=>`<a href="#${k}" class="${k===ruta||ruta.startsWith('prof-g')&&k==='prof-grupos'?'activo':''}">${ic(i)}${t}</a>`).join('')}${prof?`<a href="#inicio">${ic('cambio')}Alumno</a>`:`<button id="bmas" class="${inf.some(x=>x[0]===ruta)?'':'activo'}">${ic('mas')}Más</button>`}</nav>`;
- if(!prof)document.getElementById('bmas').onclick=abrirMas;
+ <nav class="inferior">${inf.map(([k,t,i])=>`<a href="#${k}" class="${k===ruta||ruta.startsWith('prof-g')&&k==='prof-grupos'?'activo':''}">${ic(i)}${t}</a>`).join('')}${prof||padre?`<a href="#inicio">${ic('cambio')}Alumno</a>`:`<button id="bmas" class="${inf.some(x=>x[0]===ruta)?'':'activo'}">${ic('mas')}Más</button>`}</nav>`;
+ if(!prof&&!padre)document.getElementById('bmas').onclick=abrirMas;
  setTimeout(revelar,0);
  window.scrollTo(0,0);
 }
@@ -515,7 +536,7 @@ function marco(ruta,titulo,html){
 function abrirMas(){
  const d=document.createElement('div');d.className='hoja-fondo';
  const extra=RUTAS.filter(r=>!['inicio','actividades','mensajes','calificaciones'].includes(r[0]));
- d.innerHTML=`<div class="hoja">${extra.map(([k,t,i])=>`<a href="#${k}">${ic(i)}${t}</a>`).join('')}<a href="#prof-horario">${ic('cambio')}Vista profesor</a></div>`;
+ d.innerHTML=`<div class="hoja">${extra.map(([k,t,i])=>`<a href="#${k}">${ic(i)}${t}</a>`).join('')}<a href="#prof-horario">${ic('cambio')}Vista profesor</a><a href="#padres">${ic('cambio')}Vista padres</a></div>`;
  d.onclick=e=>{if(e.target===d||e.target.closest('a'))d.remove()};
  document.body.appendChild(d);
 }
@@ -1108,6 +1129,85 @@ function pintarProf(r){
  marco('prof-horario','Mi horario',profHorarioHTML());activarMenuGrupos();document.title='Mi horario · miescuela.com';
 }
 
+// ================= Vista para padres de familia (demo, bachillerato) =================
+// En universidad los alumnos son mayores de edad: sus datos solo se comparten con los padres si el alumno lo autoriza.
+const FAMILIA={nombre:'Gabriela López Ruiz',iniciales:'GL',parentesco:'Mamá'};
+const HIJA={nombre:'Ana Páramo López',iniciales:'AP',nivel:'Bachillerato',grado:'2.º semestre',grupo:'2B',tutor:'Mtra. Elena Castro',entrada:'07:00'};
+const MATERIAS_B=[['Matemáticas II','Mtro. Raúl Ortega',[88,92]],['Química II','Mtra. Paty Núñez',[79,84]],['Inglés II','Teacher Mark Rivera',[95,97]],['Historia de México','Mtro. Óscar Lara',[90,null]],['Literatura','Mtra. Elena Castro',[85,89]],['Educación física','Coach Jorge Ibarra',[100,100]]];
+// Llegadas de la semana: hora de entrada o null si faltó. Se genera con la semana actual.
+const LLEGADAS=(()=>{const h=hoy0(),l=new Date(h);l.setDate(h.getDate()-((h.getDay()+6)%7));const o=[];const horas=['06:54','07:02','07:12','06:58','07:01'];
+ for(let i=0;i<5;i++){const d=new Date(l);d.setDate(l.getDate()+i);o.push({f:fTxt(d),dia:DIAS[i+1],hora:d<=h?(i===2?'07:12':horas[i]):undefined})}return o})();
+const TAREAS_B=[
+ {m:'Química II',t:'Reporte de práctica: reacciones de óxido-reducción',entrega:'24/11/2026',estado:'entregada',calif:90},
+ {m:'Matemáticas II',t:'Ejercicios de funciones trigonométricas',entrega:'25/11/2026',estado:'no entregó'},
+ {m:'Literatura',t:'Reseña de "Pedro Páramo"',entrega:'01/12/2026',estado:'pendiente'},
+ {m:'Inglés II',t:'Presentación oral: my future plans',entrega:'03/12/2026',estado:'pendiente'},
+ {m:'Historia de México',t:'Línea del tiempo de la Revolución',entrega:'20/11/2026',estado:'entregada',calif:95}];
+const EVENTOS_B=[['28/11/2026','Junta de padres de familia, 2.º semestre','Sábado 9:00 · Auditorio'],['04/12/2026','Exámenes del segundo parcial','Del 4 al 10 de diciembre'],['12/12/2026','Posada y entrega de boletas','Viernes 17:00'],['18/12/2026','Inicio de vacaciones de invierno','Regreso el 7 de enero']];
+const AVISOS_B=[{id:1,de:'Dirección',f:'25/11 · 10:30',t:'El viernes 27 de noviembre la salida será a las 12:00 por junta de consejo técnico.',leido:false},{id:2,de:'Control escolar',f:'20/11 · 09:00',t:'Ya pueden descargar la boleta del primer parcial desde esta sección.',leido:true}];
+const NOTIF_B={llegada:true,falta:true,tareas:true,calif:true,avisos:true};
+const MSG_FAM={tutor:[['prof','Buenas tardes, señora López. Ana va muy bien en general; solo le recomiendo reforzar Química antes del examen.','22/11 · 16:40']]};
+
+const RUTAS_PADRES=[['padres','Resumen','inicio','Familia'],['padres-escuela','Calificaciones y tareas','calif','Familia'],['padres-mensajes','Mensajes','msg','Familia']];
+
+function llegadaHoy(){const h=fTxt(hoy0()),d=LLEGADAS.find(x=>x.f===h);if(!d)return {txt:'Hoy no hay clases',sub:'Fin de semana',tipo:''};
+ if(d.hora===null)return {txt:'No llegó hoy',sub:'Te avisamos a las 7:30',tipo:'mal'};
+ const tarde=min(d.hora)>min(HIJA.entrada)+5;return {txt:`Llegó a las ${d.hora}`,sub:tarde?'Retardo: llegó después de las 7:05':'A tiempo · registro en la entrada',tipo:tarde?'aviso':'ok'}}
+
+function vistaPadres(){
+ const ll=llegadaHoy(),pend=TAREAS_B.filter(t=>t.estado!=='entregada'),noEnt=TAREAS_B.filter(t=>t.estado==='no entregó'),av=AVISOS_B.filter(a=>!a.leido);
+ const promB=prom2(MATERIAS_B.map(m=>prom2(m[2])));
+ return `
+ <section class="hero portada" id="portada" style="background:linear-gradient(135deg,#0E6E8C,#0A4D63)"><span class="formas" aria-hidden="true"><i></i><i></i><i></i></span><p>${FAMILIA.parentesco} de</p><h2>${HIJA.nombre}</h2><p>${HIJA.nivel} · ${HIJA.grado} · Grupo ${HIJA.grupo} · Tutora: ${HIJA.tutor}</p></section>
+ ${av.length?`<section class="tarjeta" style="border:2px solid var(--aviso)">${av.map(a=>`<div class="fila" style="align-items:flex-start"><div><span class="chip aviso">Aviso de ${a.de}</span><p style="margin:8px 0 2px">${a.t}</p><span style="font-size:12px;color:var(--gris)">${a.f}</span></div><button class="btn" data-enterado="${a.id}" style="padding:8px 12px;font-size:13px;white-space:nowrap">Enterado</button></div>`).join('')}</section>`:''}
+ <div class="rejilla">
+  <section class="tarjeta dato"><small>Hoy</small><b style="font-size:24px;color:${ll.tipo==='ok'?'var(--ok)':ll.tipo==='aviso'?'var(--aviso)':ll.tipo==='mal'?'var(--mal)':'inherit'}">${ll.txt}</b><span>${ll.sub}</span></section>
+  <section class="tarjeta dato"><small>Promedio del semestre</small><b>${num(promB,1)}</b><span>${MATERIAS_B.length} materias</span></section>
+  <a class="tarjeta dato" href="#padres-escuela" style="color:inherit"><small>Tareas</small><b style="color:${noEnt.length?'var(--mal)':'inherit'}">${noEnt.length?noEnt.length+' sin entregar':pend.length+' pendientes'}</b><span>${noEnt.length?`y ${pend.length-noEnt.length} por entregar`:'Todo al día'}</span></a>
+  <section class="tarjeta dato"><small>Colegiatura</small><b style="font-size:24px;color:var(--ok)">Al corriente</b><span>Diciembre vence el 10/12</span></section>
+ </div>
+ <section class="tarjeta"><div class="fila"><h2>Asistencia de esta semana</h2><span class="chip">Entrada ${HIJA.entrada}</span></div>
+  <div class="semana-asis">${LLEGADAS.map(d=>{const tarde=d.hora&&min(d.hora)>min(HIJA.entrada)+5,est=d.hora===undefined?'fut':d.hora===null?'mal':tarde?'aviso':'ok';return `<div class="${est}"><b>${d.dia.slice(0,3)}</b><span>${d.hora===undefined?'—':d.hora===null?'Faltó':d.hora}</span><small>${est==='ok'?'A tiempo':est==='aviso'?'Retardo':est==='mal'?'Falta':''}</small></div>`}).join('')}</div></section>
+ <div class="rejilla">
+  <section class="tarjeta"><div class="fila"><h2>Próximos eventos</h2></div><div class="lista">${EVENTOS_B.map(([f,t,s])=>`<div class="it"><span class="chip" style="padding:6px 8px;min-width:54px;justify-content:center">${fCorta(f)}</span><div class="t"><b>${t}</b><span>${s}</span></div></div>`).join('')}</div></section>
+  <section class="tarjeta"><div class="fila"><h2>Avisarme por notificación</h2></div>
+   ${[['llegada','Cuando llegue a la escuela'],['falta','Si no llega antes de las 7:30'],['tareas','Si no entrega una tarea'],['calif','Cuando tenga una calificación nueva'],['avisos','Avisos de la escuela']].map(([k,t])=>`<label class="interruptor"><span>${t}</span><input type="checkbox" data-notif="${k}" ${NOTIF_B[k]?'checked':''}><i></i></label>`).join('')}
+   <span style="font-size:12px;color:var(--gris)">Llegan a tu celular desde la plataforma. Sin grupos de WhatsApp.</span></section>
+ </div>
+ <p class="aviso-proto">Vista de demostración para padres · alumna y familia ficticias</p>`;
+}
+function vistaPadresEscuela(){
+ const est={entregada:'ok','no entregó':'mal',pendiente:''};
+ return `<section class="tarjeta"><div class="fila"><h2>Calificaciones por parcial</h2><span class="chip">${HIJA.grado}</span></div>
+  <table><thead><tr><th>Materia</th><th class="num">Parcial 1</th><th class="num">Parcial 2</th><th class="num">Promedio</th></tr></thead><tbody>
+  ${MATERIAS_B.map(([m,p,c])=>{const pr=prom2(c);return `<tr><td>${m}<br><span style="font-size:12px;color:var(--gris)">${p}</span></td>${c.map(x=>`<td class="num">${x??'<span style="color:var(--gris);font-size:12px">en curso</span>'}</td>`).join('')}<td class="num"><b style="color:${colorNota(pr)}">${num(pr,1)}</b></td></tr>`}).join('')}</tbody></table></section>
+ <section class="tarjeta"><div class="fila"><h2>Tareas</h2></div><div class="lista">${TAREAS_B.slice().sort((a,b)=>aFecha(b.entrega)-aFecha(a.entrega)).map(t=>`<div class="it"><div class="t"><b>${t.t}</b><span>${t.m} · entrega ${t.entrega}</span></div>${t.calif!=null?`<span class="nota" style="color:${colorNota(t.calif)}">${t.calif}</span>`:''}<span class="chip ${est[t.estado]}">${t.estado==='entregada'?'Entregada':t.estado==='no entregó'?'No la entregó':'Por entregar'}</span></div>`).join('')}</div></section>`;
+}
+let chatFam='tutor';
+function vistaPadresMensajes(){return `<div class="chat abierto" id="fch"><section class="tarjeta contactos" id="fcc"></section><section class="tarjeta conversacion" id="fcv"></section></div>`}
+function pintarMensajesFam(){
+ const contactos=[['tutor',HIJA.tutor,'Tutora del grupo '+HIJA.grupo],...MATERIAS_B.filter(m=>m[1]!==HIJA.tutor).map(([m,p])=>[p,p,m]),['escolar','Control escolar','Trámites y documentos']];
+ const cc=document.getElementById('fcc'),cv=document.getElementById('fcv');
+ cc.innerHTML=`<h2>Escribir a</h2><span style="font-size:13px;color:var(--gris)">La tutora y los maestros de ${HIJA.nombre.split(' ')[0]}, directo.</span><div class="lista">${contactos.map(([k,n,s])=>{const h=MSG_FAM[k]||[];return `<div class="it ${k===chatFam?'activo':''}" data-fam="${esc(k)}"><span class="avatar" style="width:40px;height:40px;font-size:12px;background:#0E6E8C">${n.split(' ').filter(x=>!/\./.test(x)).slice(0,2).map(x=>x[0]).join('')}</span><div class="t"><b>${n}</b><span>${h.length?esc(previaMsg(h.at(-1)[1],h.at(-1)[4]).slice(0,32)):s}</span></div></div>`}).join('')}</div>`;
+ const c=contactos.find(x=>x[0]===chatFam),h=MSG_FAM[chatFam]||(MSG_FAM[chatFam]=[]);
+ document.getElementById('fch').classList.toggle('abierto',!!chatFam);
+ cv.innerHTML=`<div><button class="btn sec solo-movil" id="fatras" style="padding:6px 10px;font-size:13px;margin-bottom:6px">← Contactos</button><h2>${c[1]}</h2><span style="font-size:13px;color:var(--gris)">${c[2]}</span></div>
+  <div class="burbujas" id="fbb">${h.length?h.map(([q,t,f,,a])=>burbuja(q==='yo',t,f,a)).join(''):'<div class="vacio">Todavía no hay mensajes.</div>'}</div>${barraEscribir('ffm','Escribe tu mensaje…')}`;
+ const bb=cv.querySelector('#fbb');bb.scrollTop=bb.scrollHeight;
+ conectarEscribir(cv.querySelector('#ffm'),(v,a)=>{h.push(['yo',v,ahoraTxt(),null,a]);pintarMensajesFam();document.querySelector('#ffm .tx').focus()});
+ cc.onclick=e=>{const it=e.target.closest('[data-fam]');if(it){chatFam=it.dataset.fam;pintarMensajesFam()}};
+ cv.onclick=e=>{if(abrirAdj(e))return;if(e.target.id==='fatras'){chatFam=null;document.getElementById('fch').classList.remove('abierto')}};
+}
+function pintarPadres(r){
+ const def=RUTAS_PADRES.find(x=>x[0]===r)||RUTAS_PADRES[0];
+ marco(def[0],def[1],def[0]==='padres'?vistaPadres():def[0]==='padres-escuela'?vistaPadresEscuela():vistaPadresMensajes());
+ if(def[0]==='padres'){const m=document.querySelector('main');
+  m.onclick=e=>{const b=e.target.closest('[data-enterado]');if(b){AVISOS_B.find(a=>a.id==b.dataset.enterado).leido=true;pintarPadres('padres')}};
+  m.onchange=e=>{const c=e.target.closest('[data-notif]');if(c)NOTIF_B[c.dataset.notif]=c.checked}}
+ if(def[0]==='padres-mensajes'){if(!chatFam&&innerWidth>820)chatFam='tutor';pintarMensajesFam()}
+ document.title=def[1]+' · Familia · miescuela.com';
+}
+
 function pintarKardex(ciclo){
  const c=CICLOS.find(x=>x.ciclo===ciclo),el=document.getElementById('kc');
  el.innerHTML=`<div class="fila"><div><h2>${c.sem}.º semestre</h2><span style="font-size:13px;color:var(--gris)">${c.ciclo}${c.actual?' · en curso':''}</span></div><div style="text-align:right"><small style="font-size:12px;color:var(--gris);font-weight:600">Promedio</small><div class="nota" style="font-size:24px">${fmt(Math.round(promCiclo(c)*100)/100)}</div></div></div>
@@ -1120,6 +1220,7 @@ function pintar(){
  if(GRAB.rec){GRAB.cancelar=true;GRAB.rec.stop()}
  VISOR.cerrar();document.querySelector('.menu-g')?.remove();document.querySelectorAll('.visor-fondo').forEach(x=>x.remove());
  if(r.startsWith('prof-'))return pintarProf(r);
+ if(r.startsWith('padres'))return pintarPadres(r);
  const def=RUTAS.find(x=>x[0]===r)||RUTAS[0];
  marco(def[0],def[1],V[def[0]]());
  if(def[0]==='kardex'){pintarKardex(actual.ciclo);document.getElementById('tk').onclick=e=>{const b=e.target.closest('button');if(b)pintarKardex(b.dataset.c)}}

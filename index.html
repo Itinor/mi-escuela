@@ -121,6 +121,31 @@ td.num,th.num{text-align:right}
 .escribir{display:flex;gap:8px}
 .escribir input{flex:1}
 .punto{min-width:20px;height:20px;border-radius:999px;background:var(--mal);color:#fff;font-size:11px;font-weight:700;display:inline-grid;place-items:center;padding:0 6px}
+.seg{display:inline-flex;background:var(--suave);border-radius:12px;padding:3px;gap:2px}
+.seg button{border:0;background:none;border-radius:9px;padding:8px 12px;font-weight:700;font-size:13px;color:var(--gris);min-width:44px}
+.seg button.on.P{background:var(--ok);color:#fff}.seg button.on.R{background:var(--aviso);color:#fff}.seg button.on.F{background:var(--mal);color:#fff}
+.modo{display:flex;align-items:center;gap:10px;margin:10px 4px 0;padding:10px 12px;border-radius:12px;border:1.5px dashed #C9BCD9;color:var(--marca);font-weight:600;font-size:13px}
+.modo svg{width:18px;height:18px;flex:none}
+.prof .lateral .logo b,.prof .avatar{background:#145536}
+.prof .nav a.activo{background:#1F5F45}
+.visor-fondo{position:fixed;inset:0;background:rgba(28,20,38,.55);z-index:30;display:flex;align-items:center;justify-content:center;padding:16px}
+.visor{background:#fff;border-radius:20px;width:100%;max-width:1150px;height:min(92vh,980px);display:grid;grid-template-rows:auto 1fr;overflow:hidden}
+.visor .cab{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--linea)}
+.visor .cab b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.visor .cab .ico{border:0;background:var(--suave);border-radius:10px;width:40px;height:40px;display:grid;place-items:center;color:var(--marca)}
+.visor .cab .ico svg{width:20px;height:20px}
+.visor .cuerpo-v{display:grid;grid-template-columns:1fr;min-height:0}
+.visor.con-panel .cuerpo-v{grid-template-columns:1fr 320px}
+.visor-hojas{overflow:auto;background:#EEE9F6;padding:10px;min-height:0}
+.visor-hojas canvas,.visor-hojas img{display:block;width:100%;max-width:820px;height:auto;margin:0 auto 10px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.15);border-radius:4px}
+.visor-hojas iframe{width:100%;height:100%;min-height:70vh;border:0;border-radius:8px;background:#fff}
+.visor-hojas pre{white-space:pre-wrap;margin:0 auto;max-width:820px;padding:16px;background:#fff;border-radius:8px;font-size:13px}
+.visor-hojas .msj{text-align:center;color:var(--gris);padding:40px 16px;font-size:14px}
+.panel-cal{border-left:1px solid var(--linea);padding:16px;display:flex;flex-direction:column;gap:12px;overflow:auto}
+.rapidas{display:flex;gap:6px;flex-wrap:wrap}
+.rapidas button{border:0;background:var(--suave);color:var(--marca);font-weight:700;border-radius:10px;padding:8px 12px}
+.rapidas button.on{background:var(--marca);color:#fff}
+textarea{font:inherit;padding:12px 14px;border-radius:12px;border:1.5px solid var(--linea);width:100%;min-height:90px;resize:vertical}
 .solo-movil{display:none}
 .inferior{display:none}
 .hoja-fondo{position:fixed;inset:0;background:rgba(28,20,38,.4);z-index:20;display:flex;align-items:flex-end;justify-content:center}
@@ -145,6 +170,13 @@ td.num,th.num{text-align:right}
   .hor .b{grid-template-columns:62px 1fr;gap:10px}
   .solo-escritorio{display:none}
   .chat{grid-template-columns:1fr}
+  .visor-fondo{padding:0;align-items:stretch}
+  .prof .barra{background:#145536}
+  .prof .barra .avatar{color:#145536;background:#fff}
+  .visor{border-radius:0;height:100%}
+  .visor.con-panel .cuerpo-v{grid-template-columns:1fr;grid-template-rows:1fr auto}
+  .panel-cal{border-left:0;border-top:1px solid var(--linea);max-height:46vh}
+  .seg button{padding:8px 10px}
   .chat.abierto .contactos{display:none}
   .chat:not(.abierto) .conversacion{display:none}
   .solo-movil{display:block}
@@ -190,6 +222,18 @@ const MENSAJES={
  '21E034':[['yo','Maestra, ¿el cuadro puede ser en horizontal?','10/11 · 19:40'],['prof','Sí, como les quede más claro.','10/11 · 20:15']],
  '21E032':[]
 };
+// ---- Vista del profesor (demo): Lic. Sofía Ramírez, Derecho Procesal Penal ----
+const PROFE={nombre:'Lic. Sofía Ramírez',iniciales:'SR',cl:'21E035'};
+const GRUPO=[['12345678','Pedro Páramo García'],['12345601','Mariana López Ortiz'],['12345602','Luis Herrera Campos'],['12345603','Andrea Salinas Rivas'],['12345604','José Martínez Duarte'],['12345605','Karla Méndez Soto'],['12345606','Diego Chávez Luna'],['12345607','Fernanda Ríos Vega'],['12345608','Óscar Navarro Gil'],['12345609','Paola Cruz Ibarra'],['12345610','Ricardo Fuentes Mora'],['12345611','Valeria Guzmán Peña']];
+// Entregas del ensayo (tarea 1). url = archivo de ejemplo; blob = archivo que sube el alumno en esta sesión.
+const ENTREGAS={
+ '12345601':{archivo:'ensayo_lopez_m.pdf',url:'ejemplos/ensayo_lopez_m.pdf',fecha:'24/11 · 21:14'},
+ '12345602':{archivo:'ensayo_herrera_l.pdf',url:'ejemplos/ensayo_herrera_l.pdf',fecha:'25/11 · 18:02',calif:90,coment:'Bien explicado. Faltó mencionar los acuerdos probatorios.'},
+ '12345605':{archivo:'Ensayo proceso penal Karla.docx',url:null,fecha:'25/11 · 23:40'}
+};
+// Pase de lista: { 'dd/mm/aaaa': { matrícula: 'P' | 'R' | 'F' } }. retardo perdonado = 'P' con nota.
+const ASIST={'21/11/2026':Object.fromEntries(GRUPO.map(([m],i)=>[m,i===6?'F':i===3?'R':'P'])),'14/11/2026':Object.fromEntries(GRUPO.map(([m])=>[m,'P']))};
+const PERDONADOS={};
 const DOCS_ENTREGADOS=[['Acta de nacimiento','09/08/2024'],['CURP','25/06/2024'],['Ficha de inscripción','25/06/2024'],['Validación','09/08/2024']];
 const DOCS_PENDIENTES=['Relación de estudios de bachillerato legalizada','4 fotografías tamaño infantil, blanco y negro','Carta de trabajo','Certificado médico con tipo sanguíneo'];
 
@@ -207,6 +251,10 @@ const I={
  msg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
  subir:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>',
  enviar:'<path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/>',
+ lista:'<rect x="5" y="3" width="14" height="19" rx="2"/><path d="M9 3h6v3H9zM9 12l2 2 4-4M9 18h6"/>',
+ ojo:'<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+ cerrar:'<path d="M18 6 6 18M6 6l12 12"/>',
+ cambio:'<path d="M17 3l4 4-4 4M21 7H9M7 21l-4-4 4-4M3 17h12"/>',
  act:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
  mas:'<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
  salir:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
@@ -223,12 +271,18 @@ const bloqueActual=()=>{const h=new Date();h.setHours(0,0,0,0);return HORARIO.bl
 const profDe=cl=>{for(const b of HORARIO.bloques)for(const c of b.clases)if(c[3]===cl)return c[4];return ''};
 const diasPara=f=>{const h=new Date();h.setHours(0,0,0,0);return Math.round((aFecha(f)-h)/864e5)};
 const esc=t=>t.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hoyTxt=()=>{const h=new Date();return `${String(h.getDate()).padStart(2,'0')}/${String(h.getMonth()+1).padStart(2,'0')}/${h.getFullYear()}`};
+const ahoraTxt=()=>{const h=new Date();return `${String(h.getDate()).padStart(2,'0')}/${String(h.getMonth()+1).padStart(2,'0')} · ${hhmm(h.getHours()*60+h.getMinutes())}`};
+const faltasDe=cl=>cl===PROFE.cl?Object.values(ASIST).filter(d=>d[ALUMNO.matricula]==='F').length:0;
+const retardosDe=cl=>cl===PROFE.cl?Object.values(ASIST).filter(d=>d[ALUMNO.matricula]==='R').length:0;
 const ic=(k,s='')=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${s}>${I[k]}</svg>`;
 
 const RUTAS=[
  ['inicio','Inicio','inicio','Escolar'],['calificaciones','Calificaciones','calif','Escolar'],['kardex','Kárdex','kardex','Escolar'],['horario','Horario','reloj','Escolar'],['faltas','Faltas','faltas','Escolar'],['actividades','Tareas','act','Escolar'],['mensajes','Mensajes','msg','Escolar'],['calendario','Calendario','cal','Escolar'],
  ['pagos','Pagos','pagos','Administrativo'],['documentos','Documentos','docs','Administrativo'],['trayectoria','Trayectoria','tray','Administrativo'],['fiscales','Datos fiscales','fiscal','Administrativo'],['perfil','Mis datos','perfil','Cuenta']
 ];
+
+const RUTAS_PROF=[['prof-lista','Pase de lista','lista','Derecho Procesal Penal'],['prof-entregas','Entregas','docs','Derecho Procesal Penal']];
 
 const prom=a=>{const v=a.filter(x=>x!=null);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null};
 const promCiclo=c=>prom(c.materias.map(m=>m[3]));
@@ -239,26 +293,28 @@ const fmt=n=>n==null?'—':(Number.isInteger(n)?String(n):n.toFixed(2));
 const colorNota=n=>n==null?'':n>=90?'var(--ok)':n>=80?'var(--tinta)':n>=70?'var(--aviso)':'var(--mal)';
 
 function marco(ruta,titulo,html){
+ const prof=ruta.startsWith('prof-'),lista=prof?RUTAS_PROF:RUTAS;
  const nav=[];let g='';
- for(const [k,t,i,gr] of RUTAS){if(gr!==g){g=gr;nav.push(`<div class="grupo">${gr}</div>`)}nav.push(`<a href="#${k}" class="${k===ruta?'activo':''}">${ic(i)}${t}</a>`)}
- const inf=[['inicio','Inicio','inicio'],['actividades','Tareas','act'],['mensajes','Mensajes','msg'],['calificaciones','Calif.','calif']];
+ for(const [k,t,i,gr] of lista){if(gr!==g){g=gr;nav.push(`<div class="grupo">${gr}</div>`)}nav.push(`<a href="#${k}" class="${k===ruta?'activo':''}">${ic(i)}${t}</a>`)}
+ const inf=prof?[['prof-lista','Lista','lista'],['prof-entregas','Entregas','docs']]:[['inicio','Inicio','inicio'],['actividades','Tareas','act'],['mensajes','Mensajes','msg'],['calificaciones','Calif.','calif']];
+ const cambio=prof?`<a class="modo" href="#inicio">${ic('cambio')}Volver a la vista del alumno</a>`:`<a class="modo" href="#prof-lista">${ic('cambio')}Ver como profesor (demo)</a>`;
  document.getElementById('raiz').innerHTML=`
- <div class="app">
-  <aside class="lateral"><div class="logo"><b>me</b><span>miescuela.com</span></div><nav class="nav">${nav.join('')}</nav></aside>
+ <div class="app ${prof?'prof':''}">
+  <aside class="lateral"><div class="logo"><b>me</b><span>miescuela.com</span></div><nav class="nav">${nav.join('')}</nav>${cambio}</aside>
   <div class="cuerpo">
-   <header class="barra"><h1>${titulo}</h1><a class="yo" href="#perfil" aria-label="Mis datos"><span class="avatar">${ALUMNO.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${ALUMNO.nombre}</span></a></header>
+   <header class="barra"><h1>${titulo}</h1>${prof?`<span class="yo"><span class="avatar">${PROFE.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${PROFE.nombre} · Profesora</span></span>`:`<a class="yo" href="#perfil" aria-label="Mis datos"><span class="avatar">${ALUMNO.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${ALUMNO.nombre}</span></a>`}</header>
    <main>${html}</main>
   </div>
  </div>
- <nav class="inferior">${inf.map(([k,t,i])=>`<a href="#${k}" class="${k===ruta?'activo':''}">${ic(i)}${t}</a>`).join('')}<button id="bmas" class="${inf.some(x=>x[0]===ruta)?'':'activo'}">${ic('mas')}Más</button></nav>`;
- document.getElementById('bmas').onclick=abrirMas;
+ <nav class="inferior">${inf.map(([k,t,i])=>`<a href="#${k}" class="${k===ruta?'activo':''}">${ic(i)}${t}</a>`).join('')}${prof?`<a href="#inicio">${ic('cambio')}Alumno</a>`:`<button id="bmas" class="${inf.some(x=>x[0]===ruta)?'':'activo'}">${ic('mas')}Más</button>`}</nav>`;
+ if(!prof)document.getElementById('bmas').onclick=abrirMas;
  window.scrollTo(0,0);
 }
 
 function abrirMas(){
  const d=document.createElement('div');d.className='hoja-fondo';
  const extra=RUTAS.filter(r=>!['inicio','actividades','mensajes','calificaciones'].includes(r[0]));
- d.innerHTML=`<div class="hoja">${extra.map(([k,t,i])=>`<a href="#${k}">${ic(i)}${t}</a>`).join('')}</div>`;
+ d.innerHTML=`<div class="hoja">${extra.map(([k,t,i])=>`<a href="#${k}">${ic(i)}${t}</a>`).join('')}<a href="#prof-lista">${ic('cambio')}Vista profesor</a></div>`;
  d.onclick=e=>{if(e.target===d||e.target.closest('a'))d.remove()};
  document.body.appendChild(d);
 }
@@ -279,7 +335,7 @@ const V={
    <a class="tarjeta dato" href="#kardex" style="color:inherit"><small>Promedio general</small><b>${fmt(Math.round(promGeneral*100)/100)}</b><span>4 semestres cerrados</span></a>
    <a class="tarjeta dato" href="#calificaciones" style="color:inherit"><small>Este semestre</small><b>${fmt(pa)}</b><span>${capt} de ${actual.materias.length} materias calificadas</span></a>
    <a class="tarjeta dato" href="#pagos" style="color:inherit"><small>Pagos</small><b style="font-size:24px;color:var(--ok)">Al corriente</b><span>Saldo $0.00 · sin adeudos</span></a>
-   <a class="tarjeta dato" href="#faltas" style="color:inherit"><small>Faltas</small><b>0</b><span>en ${actual.materias.length} materias</span></a>
+   <a class="tarjeta dato" href="#faltas" style="color:inherit"><small>Faltas</small><b>${actual.materias.reduce((a,m)=>a+faltasDe(m[0]),0)}</b><span>en ${actual.materias.length} materias</span></a>
   </div>
   <section class="tarjeta">
    <div class="fila"><h2>Avance de la carrera</h2><span class="chip">${pct.toFixed(2)} %</span></div>
@@ -334,10 +390,21 @@ const V={
   <div id="hc"></div>
   <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn sec" onclick="window.print()">${ic('bajar','style="width:16px;height:16px;vertical-align:-3px;margin-right:6px"')}Descargar horario</button></div>`;
  },
+ 'prof-lista'(){
+  return `<section class="tarjeta"><div class="fila"><div><h2>${nomMat(PROFE.cl)}</h2><span style="font-size:13px;color:var(--gris)">${PROFE.cl} · Sábado 11:00–12:30 · Aula 14 · ${GRUPO.length} alumnos</span></div>
+   <label style="flex-direction:row;align-items:center;gap:8px">Fecha<select id="lf" style="width:auto;padding:8px 10px">${[hoyTxt(),...Object.keys(ASIST).filter(f=>f!==hoyTxt())].map(f=>`<option>${f}</option>`).join('')}</select></label></div>
+   <div id="lr"></div></section>`;
+ },
+ 'prof-entregas'(){
+  const t=TAREAS[0];
+  return `<section class="tarjeta"><div class="fila" style="align-items:flex-start"><div><span style="font-size:12px;color:var(--gris)">${nomMat(t.cl)} · entrega ${t.entrega} ${t.hora}</span><h2>${t.titulo}</h2></div><button class="btn sec" style="padding:8px 12px;font-size:13px" onclick="alert('Prototipo: aquí la profesora publica una tarea nueva (título, descripción, requisitos y fecha) y le llega a todo el grupo.')">+ Nueva tarea</button></div><div id="er"></div></section>`;
+ },
  faltas(){
-  return `<section class="tarjeta"><div class="fila"><h2>${actual.ciclo}</h2><span class="chip ok">${ic('check','style="width:14px;height:14px"')} Sin faltas</span></div>
-  <table><thead><tr><th>Materia</th><th class="num">Ordinario</th><th class="num ocultar-movil">Recuperación</th><th class="num">Total</th></tr></thead><tbody>
-  ${actual.materias.map(m=>`<tr><td>${m[1]}<br><span style="font-size:12px;color:var(--gris)">${m[0]}</span></td><td class="num">0</td><td class="num ocultar-movil">0</td><td class="num"><b>0</b></td></tr>`).join('')}
+  const tot=actual.materias.reduce((a,m)=>a+faltasDe(m[0]),0);
+  return `<section class="tarjeta"><div class="fila"><h2>${actual.ciclo}</h2>${tot?`<span class="chip aviso">${tot} falta${tot>1?'s':''}</span>`:`<span class="chip ok">${ic('check','style="width:14px;height:14px"')} Sin faltas</span>`}</div>
+  <span style="font-size:13px;color:var(--gris)">Se actualiza en cuanto tu profesor pasa lista en la plataforma.</span>
+  <table><thead><tr><th>Materia</th><th class="num">Retardos</th><th class="num">Ordinario</th><th class="num ocultar-movil">Recuperación</th><th class="num">Total</th></tr></thead><tbody>
+  ${actual.materias.map(m=>{const f=faltasDe(m[0]);return `<tr><td>${m[1]}<br><span style="font-size:12px;color:var(--gris)">${m[0]}</span></td><td class="num">${retardosDe(m[0])}</td><td class="num">${f}</td><td class="num ocultar-movil">0</td><td class="num"><b style="color:${f?'var(--aviso)':''}">${f}</b></td></tr>`}).join('')}
   </tbody></table></section>`;
  },
  actividades(){
@@ -434,6 +501,7 @@ function tarjetaTarea(t){
   ${t.comentario?`<div class="coment"><b>Comentario del profesor:</b> ${t.comentario}</div>`:''}
   <div class="acc">
    ${t.estado==='pendiente'?`<label class="btn" style="flex-direction:row;color:#fff;font-size:13px;cursor:pointer">${ic('subir','style="width:16px;height:16px"')} Subir mi entrega<input type="file" data-t="${t.id}" hidden></label>`:''}
+   ${t.blob?`<button class="btn sec" data-ver="${t.id}">${ic('ojo','style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Ver mi entrega</button>`:''}
    ${t.estado==='entregada'?`<button class="btn sec" data-quitar="${t.id}">Cambiar archivo</button>`:''}
    <a class="btn sec" href="#mensajes" data-hablar="${t.cl}">${ic('msg','style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Preguntar al profesor</a>
   </div></article>`;
@@ -460,6 +528,97 @@ function pintarMensajes(){
  const at=document.getElementById('atras');if(at)at.onclick=()=>{chatSel=null;pintarMensajes()};
 }
 
+// ---------- Visor de archivos (misma idea que en turbinas: vista previa sin descargar) ----------
+const VISOR={
+ pdfjs:null,
+ cargarPdfjs(){
+  if(window.pdfjsLib)return Promise.resolve(window.pdfjsLib);
+  if(!this.pdfjs)this.pdfjs=new Promise((ok,mal)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';sc.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';ok(pdfjsLib)};sc.onerror=()=>{this.pdfjs=null;mal(new Error('pdfjs'))};document.head.appendChild(sc)});
+  return this.pdfjs;
+ },
+ tipo(n,m=''){n=String(n||'').toLowerCase();
+  if(/^image\//.test(m)||/\.(png|jpe?g|gif|webp|bmp)$/.test(n))return 'imagen';
+  if(/pdf/.test(m)||n.endsWith('.pdf'))return 'pdf';
+  if(/\.(docx?|pptx?|xlsx?)$/.test(n))return 'office';
+  if(/^text\//.test(m)||/\.(txt|md|csv)$/.test(n))return 'texto';
+  return 'otro'},
+ cerrar(){document.querySelector('.visor-fondo')?.remove();document.removeEventListener('keydown',VISOR._esc)},
+ _esc(e){if(e.key==='Escape')VISOR.cerrar()},
+ // {nombre, url?, blob?, panel?: html del panel lateral (calificar)}
+ async abrir({nombre,url,blob,panel}){
+  this.cerrar();
+  const d=document.createElement('div');d.className='visor-fondo';
+  d.innerHTML=`<div class="visor ${panel?'con-panel':''}"><div class="cab"><b>${esc(nombre||'Archivo')}</b><button class="ico" id="vb" aria-label="Descargar" title="Descargar">${ic('bajar')}</button><button class="ico" id="vc" aria-label="Cerrar">${ic('cerrar')}</button></div>
+   <div class="cuerpo-v"><div class="visor-hojas" id="vh"><div class="msj">Abriendo…</div></div>${panel?`<aside class="panel-cal" id="vp">${panel}</aside>`:''}</div></div>`;
+  d.onclick=e=>{if(e.target===d)VISOR.cerrar()};
+  document.body.appendChild(d);document.addEventListener('keydown',VISOR._esc);
+  document.getElementById('vc').onclick=()=>VISOR.cerrar();
+  const caja=()=>document.getElementById('vh'),t=this.tipo(nombre,blob?.type);
+  const msj=x=>{if(caja())caja().innerHTML=`<div class="msj">${x}</div>`};
+  if(!blob&&url)blob=await fetch(url).then(r=>r.ok?r.blob():null).catch(()=>null);
+  document.getElementById('vb').onclick=()=>{if(!blob)return alert('Prototipo: este archivo de ejemplo no tiene contenido para descargar.');const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=nombre;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),6e4)};
+  if(t==='office')return msj(`${ic('docs','style="width:40px;height:40px;color:#C9BCD9;display:block;margin:0 auto 8px"')}Los archivos de Word, Excel y PowerPoint se ven aquí cuando la plataforma tiene servidor (con el visor de Microsoft).<br>En este prototipo, descárgalo para abrirlo.<br><br><b>Tip para alumnos:</b> si lo entregas en PDF, el profesor lo lee al instante.`);
+  if(!blob)return msj('No se pudo abrir el archivo. Revisa tu internet.');
+  const u=URL.createObjectURL(blob);
+  if(t==='imagen')return caja().innerHTML=`<img src="${u}" alt="${esc(nombre)}">`;
+  if(t==='texto')return caja().innerHTML=`<pre>${esc((await blob.text()).slice(0,200000))}</pre>`;
+  if(t!=='pdf')return msj('Este tipo de archivo no tiene vista previa. Descárgalo para abrirlo.');
+  try{
+   const lib=await this.cargarPdfjs(),doc=await lib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise,c=caja();if(!c)return;
+   c.innerHTML=`<div style="text-align:center;font-size:12px;color:var(--gris);margin-bottom:6px">${doc.numPages} página${doc.numPages>1?'s':''}</div>`;
+   const ancho=Math.min(c.clientWidth-20,820),max=Math.min(doc.numPages,60);
+   for(let n=1;n<=max;n++){if(!caja())return;const pg=await doc.getPage(n),v0=pg.getViewport({scale:1}),v=pg.getViewport({scale:ancho/v0.width*(devicePixelRatio||1)}),cv=document.createElement('canvas');cv.width=v.width;cv.height=v.height;c.appendChild(cv);await pg.render({canvasContext:cv.getContext('2d'),viewport:v}).promise}
+  }catch(e){if(caja())caja().innerHTML=`<iframe title="${esc(nombre)}" src="${u}"></iframe>`}
+ }
+};
+
+// ---------- Profesor: pase de lista ----------
+function pintarLista(fecha){
+ const reg=ASIST[fecha]||(ASIST[fecha]={}),per=PERDONADOS[fecha]||(PERDONADOS[fecha]={});
+ const n=k=>GRUPO.filter(([m])=>reg[m]===k).length,sin=GRUPO.filter(([m])=>!reg[m]).length;
+ document.getElementById('lr').style.cssText='display:flex;flex-direction:column;gap:12px';
+ document.getElementById('lr').innerHTML=`
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="chip ok">${n('P')} presentes</span><span class="chip aviso">${n('R')} retardos</span><span class="chip mal">${n('F')} faltas</span>${sin?`<span class="chip">${sin} sin marcar</span>`:''}<span style="flex:1"></span><button class="btn sec" id="ltodos" style="padding:8px 12px;font-size:13px">Todos presentes</button></div>
+  <div class="lista">${GRUPO.map(([m,nom])=>`<div class="it"><span class="avatar" style="width:36px;height:36px;font-size:12px;color:#fff;background:${m===ALUMNO.matricula?'var(--marca)':'#8C7FA0'}">${nom.split(' ').slice(0,2).map(x=>x[0]).join('')}</span><div class="t"><b>${nom}</b><span>${m}${per[m]?' · retardo perdonado':''}${reg[m]==='R'?` · <a href="#" data-perdonar="${m}" style="font-weight:600">Perdonar retardo</a>`:''}</span></div>
+   <div class="seg" data-m="${m}">${['P','R','F'].map(k=>`<button data-k="${k}" class="${k} ${reg[m]===k?'on':''}" title="${{P:'Presente',R:'Retardo',F:'Falta'}[k]}">${k}</button>`).join('')}</div></div>`).join('')}</div>
+  <button class="btn" id="lguardar">Guardar lista</button>
+  <span style="font-size:12px;color:var(--gris);text-align:center">P = presente · R = retardo · F = falta. Cada alumno ve su asistencia al momento en su sección de Faltas.</span>`;
+ const lr=document.getElementById('lr');
+ lr.onclick=e=>{
+  const b=e.target.closest('.seg button');if(b){const m=b.parentNode.dataset.m;reg[m]=b.dataset.k;delete per[m];return pintarLista(fecha)}
+  const pr=e.target.closest('[data-perdonar]');if(pr){e.preventDefault();reg[pr.dataset.perdonar]='P';per[pr.dataset.perdonar]=1;return pintarLista(fecha)}
+  if(e.target.id==='ltodos'){GRUPO.forEach(([m])=>{if(!reg[m])reg[m]='P'});return pintarLista(fecha)}
+  if(e.target.id==='lguardar'){const s2=GRUPO.filter(([m])=>!reg[m]).length;alert(s2?`Te faltan ${s2} alumnos por marcar.`:`Lista del ${fecha} guardada: ${n('P')} presentes, ${n('R')} retardos, ${n('F')} faltas.`)}
+ };
+}
+
+// ---------- Profesor: entregas y calificación ----------
+function pintarEntregas(){
+ const ent=GRUPO.filter(([m])=>ENTREGAS[m]),cal=ent.filter(([m])=>ENTREGAS[m].calif!=null);
+ document.getElementById('er').innerHTML=`
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip">${ent.length} de ${GRUPO.length} entregaron</span><span class="chip ok">${cal.length} calificadas</span>${ent.length-cal.length?`<span class="chip aviso">${ent.length-cal.length} por calificar</span>`:''}</div>
+  <div class="lista">${GRUPO.slice().sort((a,b)=>(!!ENTREGAS[b[0]])-(!!ENTREGAS[a[0]])).map(([m,nom])=>{const e=ENTREGAS[m];
+   return `<div class="it"><div class="t"><b>${nom}</b><span>${e?`${esc(e.archivo)} · ${e.fecha}`:'Sin entregar'}</span></div>
+   ${e?(e.calif!=null?`<span class="nota" style="color:${colorNota(e.calif)}">${e.calif}</span>`:'<span class="chip aviso">Por calificar</span>')+`<button class="btn sec" data-abrir="${m}" style="padding:8px 12px;font-size:13px">${ic('ojo','style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}${e.calif!=null?'Ver':'Ver y calificar'}</button>`:'<span class="chip">—</span>'}</div>`}).join('')}</div>`;
+ document.getElementById('er').onclick=e=>{const b=e.target.closest('[data-abrir]');if(b)abrirEntrega(b.dataset.abrir)};
+}
+function abrirEntrega(m){
+ const e=ENTREGAS[m],nom=GRUPO.find(g=>g[0]===m)[1];
+ const panel=`<div><span style="font-size:12px;color:var(--gris)">Entregó el ${e.fecha}</span><h2 style="font-size:18px">${nom}</h2></div>
+  <label>Calificación (0 a 100)<input id="vcal" type="number" min="0" max="100" inputmode="numeric" value="${e.calif??''}" placeholder="Ej. 90"></label>
+  <div class="rapidas">${[100,95,90,80,70,60].map(v=>`<button data-v="${v}" class="${e.calif===v?'on':''}">${v}</button>`).join('')}</div>
+  <label>Comentario para el alumno (opcional)<textarea id="vcom" placeholder="Ej. Buen trabajo, revisa las citas.">${esc(e.coment||'')}</textarea></label>
+  <button class="btn" id="vguardar">Guardar calificación</button>
+  <span style="font-size:12px;color:var(--gris)">El alumno la ve al instante en Tareas y Calificaciones. No necesitas descargar el archivo.</span>`;
+ VISOR.abrir({nombre:e.archivo,url:e.url,blob:e.blob,panel});
+ const vp=document.getElementById('vp');
+ vp.onclick=ev=>{const r=ev.target.closest('.rapidas button');if(r){document.getElementById('vcal').value=r.dataset.v;vp.querySelectorAll('.rapidas button').forEach(x=>x.classList.toggle('on',x===r))}
+  if(ev.target.id==='vguardar'){const v=Number(document.getElementById('vcal').value);if(document.getElementById('vcal').value===''||!(v>=0&&v<=100))return alert('Escribe una calificación de 0 a 100.');
+   e.calif=v;e.coment=document.getElementById('vcom').value.trim();
+   if(m===ALUMNO.matricula){const t=TAREAS[0];t.estado='calificada';t.calif=v;t.comentario=e.coment||null}
+   VISOR.cerrar();pintarEntregas()}};
+}
+
 function pintarKardex(ciclo){
  const c=CICLOS.find(x=>x.ciclo===ciclo),el=document.getElementById('kc');
  el.innerHTML=`<div class="fila"><div><h2>${c.sem}.º semestre</h2><span style="font-size:13px;color:var(--gris)">${c.ciclo}${c.actual?' · en curso':''}</span></div><div style="text-align:right"><small style="font-size:12px;color:var(--gris);font-weight:600">Promedio</small><div class="nota" style="font-size:24px">${fmt(Math.round(promCiclo(c)*100)/100)}</div></div></div>
@@ -469,15 +628,18 @@ function pintarKardex(ciclo){
 
 function pintar(){
  let r=(location.hash||'').slice(1)||'inicio';
- const def=RUTAS.find(x=>x[0]===r)||RUTAS[0];
+ const def=RUTAS.concat(RUTAS_PROF).find(x=>x[0]===r)||RUTAS[0];
+ VISOR.cerrar();
  marco(def[0],def[1],V[def[0]]());
  if(def[0]==='kardex'){pintarKardex(actual.ciclo);document.getElementById('tk').onclick=e=>{const b=e.target.closest('button');if(b)pintarKardex(b.dataset.c)}}
  if(def[0]==='actividades'){pintarTareas('pendiente');
   document.getElementById('tt').onclick=e=>{const b=e.target.closest('button');if(b)pintarTareas(b.dataset.f)};
-  document.getElementById('tl').onchange=e=>{const i=e.target.closest('input[type=file]');if(!i||!i.files[0])return;const t=TAREAS.find(x=>x.id==i.dataset.t);t.archivo=i.files[0].name;t.estado='entregada';pintarTareas('pendiente');alert('Listo: "'+t.archivo+'" se entregó a '+profDe(t.cl)+'.')};
-  document.getElementById('tl').onclick=e=>{const q=e.target.closest('[data-quitar]');if(q){const t=TAREAS.find(x=>x.id==q.dataset.quitar);t.estado='pendiente';t.archivo=null;pintarTareas('pendiente')}const h=e.target.closest('[data-hablar]');if(h)chatSel=h.dataset.hablar}}
+  document.getElementById('tl').onchange=e=>{const i=e.target.closest('input[type=file]');if(!i||!i.files[0])return;const t=TAREAS.find(x=>x.id==i.dataset.t);t.archivo=i.files[0].name;t.blob=i.files[0];t.estado='entregada';if(t.id===1)ENTREGAS[ALUMNO.matricula]={archivo:t.archivo,blob:t.blob,fecha:ahoraTxt()};pintarTareas('pendiente');alert('Listo: "'+t.archivo+'" se entregó a '+profDe(t.cl)+'.')};
+  document.getElementById('tl').onclick=e=>{const q=e.target.closest('[data-quitar]');if(q){const t=TAREAS.find(x=>x.id==q.dataset.quitar);t.estado='pendiente';t.archivo=null;t.blob=null;if(t.id===1)delete ENTREGAS[ALUMNO.matricula];pintarTareas('pendiente')}const v=e.target.closest('[data-ver]');if(v){const t=TAREAS.find(x=>x.id==v.dataset.ver);VISOR.abrir({nombre:t.archivo,blob:t.blob})}const h=e.target.closest('[data-hablar]');if(h)chatSel=h.dataset.hablar}}
  if(def[0]==='mensajes'){pintarMensajes();document.getElementById('cc').onclick=e=>{const it=e.target.closest('[data-cl]');if(it){chatSel=it.dataset.cl;pintarMensajes()}}}
  if(def[0]==='horario'){pintarHorario(bloqueActual().nombre);document.getElementById('hb').onclick=e=>{const b=e.target.closest('button');if(b)pintarHorario(b.dataset.b)}}
+ if(def[0]==='prof-lista'){const f=document.getElementById('lf');pintarLista(f.value);f.onchange=()=>pintarLista(f.value)}
+ if(def[0]==='prof-entregas')pintarEntregas();
  document.title=def[1]+' · miescuela.com';
 }
 addEventListener('hashchange',pintar);

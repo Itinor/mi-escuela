@@ -321,10 +321,10 @@ h1,h2,h3{font-weight:600;letter-spacing:-.015em}
 .app .tabs button.activo,.app .tabs a.tab.activo{background:var(--tinte);color:var(--acento);border-color:color-mix(in srgb,var(--acento) 22%,#fff)}
 /* Etiquetas: neutras, con un punto de color que dice el estado */
 .chip{background:#F2F0F4;color:#4A4255;font-weight:600}
-.chip.ok,.chip.aviso,.chip.mal{background:#F2F0F4;color:#4A4255}
-.chip.ok::before,.chip.aviso::before,.chip.mal::before{content:'';width:6px;height:6px;border-radius:50%;flex:none}
-.chip.ok::before{background:var(--ok)}.chip.aviso::before{background:#E08A00}.chip.mal::before{background:var(--mal)}
-.chip.mal{color:var(--mal)}
+.chip.ok{background:var(--okf);color:var(--ok)}
+.chip.mal{background:var(--malf);color:var(--mal)}
+.chip.aviso{background:#F2F0F4;color:#4A4255}
+.chip.aviso::before{content:'';width:6px;height:6px;border-radius:50%;flex:none;background:var(--acento)}
 .chip:has(svg)::before{display:none}
 /* Botones secundarios: blancos con borde; al pasar gris suave (sin brincar) */
 .btn.sec,.app .btn.sec{background:#fff;color:var(--tinta);border:1px solid var(--linea)}
@@ -343,8 +343,13 @@ h1,h2,h3{font-weight:600;letter-spacing:-.015em}
 [data-acc="baja"],[data-borra],[data-borra-cal],[data-quita-ex]{color:var(--mal)!important}
 [data-acc="baja"]:hover,[data-borra]:hover,[data-borra-cal]:hover,[data-quita-ex]:hover{background:var(--malf)!important;border-color:var(--malf)!important}
 /* Avisos importantes: borde fino y una línea de color a la izquierda, en lugar de marco grueso */
-.tarjeta[style*="solid var(--aviso)"],.tarjeta[style*="solid var(--mal)"]{border:1px solid var(--linea)!important;box-shadow:inset 4px 0 0 #E08A00,0 1px 2px rgba(28,20,38,.04)}
+.tarjeta[style*="solid var(--aviso)"],.tarjeta[style*="solid var(--mal)"]{border:1px solid var(--linea)!important;box-shadow:inset 4px 0 0 var(--acento),0 1px 2px rgba(28,20,38,.04)}
 .tarjeta[style*="solid var(--mal)"]{box-shadow:inset 4px 0 0 var(--mal),0 1px 2px rgba(28,20,38,.04)}
+/* Barras de desplazamiento discretas: aparecen solo al desplazarse */
+*{scrollbar-width:thin;scrollbar-color:transparent transparent}
+.desplazando,html.desplazando{scrollbar-color:rgba(28,20,38,.22) transparent}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:transparent;border-radius:8px}
+.desplazando::-webkit-scrollbar-thumb{background:rgba(28,20,38,.22)}
 /* Menú rápido del grupo y hoja "Más" con el mismo estilo */
 .menu-g a:hover,.hoja a:hover{background:var(--gris-hover)}
 </style>
@@ -949,7 +954,7 @@ function grupoHTML(g,tab){
  const G=grupoDe(g),nm=nuevosMsg(g),pc=porCalificar(g);
  const tabs=tabsGrupo(g);
  return `<section class="tarjeta"><div class="fila"><div><h2>${nomGrupo(g)} · ${nomMat(G.cl)}</h2><span style="font-size:13px;color:var(--gris)">${G.cl} · ${horarioCorto(G)} · ${G.aula} · ${ALUMNOS_G[g].length} alumnos</span></div><a class="btn sec" href="#prof-horario" style="padding:8px 12px;font-size:13px">← Horario</a></div></section>
-  <div class="tabs">${tabs.map(([k,t])=>`<a class="tab ${k===tab?'activo':''}" href="#prof-g/${g}/${k}">${t}${k==='mensajes'&&nm?` <span class="punto">${nm}</span>`:''}${k==='tareas'&&pc?` <span class="punto" style="background:var(--aviso)">${pc}</span>`:''}</a>`).join('')}</div>
+  <div class="tabs">${tabs.map(([k,t])=>`<a class="tab ${k===tab?'activo':''}" href="#prof-g/${g}/${k}">${t}${k==='mensajes'&&nm?` <span class="punto">${nm}</span>`:''}${k==='tareas'&&pc?` <span class="punto" style="background:var(--acento)">${pc}</span>`:''}</a>`).join('')}</div>
   <div id="gp"></div>`;
 }
 
@@ -1381,12 +1386,14 @@ function revelar(){
  document.querySelectorAll('main > *:not(#portada)').forEach((el,i)=>{el.classList.add('revela');el.style.transitionDelay=Math.min(i,5)*60+'ms';observador.observe(el)});
 }
 addEventListener('hashchange',pintar);
+// La barra de desplazamiento se ve solo mientras te desplazas
+document.addEventListener('scroll',e=>{const el=e.target===document?document.documentElement:e.target;if(!el.classList)return;el.classList.add('desplazando');clearTimeout(el._tDesp);el._tDesp=setTimeout(()=>el.classList.remove('desplazando'),900)},true);
 // Se pinta cuando ya cargaron config.js y conectado.js
 const arranque=()=>window.arrancar?arrancar():pintar();
 if(document.readyState==='loading')addEventListener('DOMContentLoaded',arranque);else arranque();
 </script>
-<script src="config.js?v=20261126e"></script>
-<script src="conectado.js?v=20261126e"></script>
-<script src="real.js?v=20261126e"></script>
+<script src="config.js?v=20261126f"></script>
+<script src="conectado.js?v=20261126f"></script>
+<script src="real.js?v=20261126f"></script>
 </body>
 </html>

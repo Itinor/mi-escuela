@@ -13,6 +13,33 @@ const SB = {cli: null, async iniciar() {
   this.cli = window.supabase.createClient(CONFIG.supabase.url, CONFIG.supabase.clave);
   return this.cli;
 }};
+const URLS = new Map();
+// ---------- Archivos: se guardan como Facebook guarda sus fotos ----------
+// 1) Las fotos se reducen (máximo 1600 px, formato WebP) antes de subirlas: pesan de 5 a 10 veces menos y se ven igual en pantalla.
+// 2) Cada archivo se guarda con su huella (SHA-256) como nombre: si se manda dos veces el mismo, se guarda una sola vez.
+const ARCHIVOS = {
+  async huella(b) { const h = await crypto.subtle.digest('SHA-256', await b.arrayBuffer()); return [...new Uint8Array(h)].slice(0, 16).map(x => x.toString(16).padStart(2, '0')).join(''); },
+  async optimizar(f) {
+    if (!/^image\/(jpeg|png|webp)$/.test(f.type || '')) return f;
+    try {
+      const bmp = await createImageBitmap(f), k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+      if (k === 1 && f.size < 400 * 1024) return f;
+      const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      const b = await new Promise(ok => c.toBlob(ok, 'image/webp', 0.82));
+      return b && b.size < f.size ? new File([b], f.name.replace(/\.\w+$/, '') + '.webp', {type: 'image/webp'}) : f;
+    } catch { return f; }
+  },
+  // Sube a bucket/carpeta/<huella>.<ext> y devuelve la ruta y el archivo ya optimizado.
+  async guardar(bucket, carpeta, f) {
+    f = await this.optimizar(f);
+    const ext = ((f.name || '').match(/\.(\w+)$/) || [, (f.type || '').split('/')[1] || 'bin'])[1].toLowerCase();
+    const ruta = `${carpeta}/${await this.huella(f)}.${ext}`;
+    await db().subir(bucket, ruta, f);
+    return {ruta, archivo: f};
+  }
+};
+window.ARCHIVOS = ARCHIVOS;
 function crearDBReal() {
   const filtrar = (q, f) => { for (const [k, v] of Object.entries(f)) { if (Array.isArray(v)) q = q.in(k, v); else if (v && typeof v === 'object' && 'desde' in v) q = q.gte(k, v.desde); else if (v === null) q = q.is(k, null); else q = q.eq(k, v); } return q; };
   const ok = ({data, error}) => { if (error) throw error; return data; };
@@ -25,8 +52,11 @@ function crearDBReal() {
     async upsert(t, filas, conflicto) { const c = await SB.iniciar(); return ok(await c.from(t).upsert(filas, {onConflict: conflicto}).select()); },
     async actualizar(t, cambios, f) { const c = await SB.iniciar(); return ok(await filtrar(c.from(t).update(cambios), f).select()); },
     async borrar(t, f) { const c = await SB.iniciar(); return ok(await filtrar(c.from(t).delete(), f)); },
-    async subir(b, ruta, archivo) { const c = await SB.iniciar(); const {error} = await c.storage.from(b).upload(ruta, archivo, {upsert: true, contentType: archivo.type || undefined}); if (error) throw error; },
-    async url(b, ruta) { const c = await SB.iniciar(); const {data, error} = await c.storage.from(b).createSignedUrl(ruta, 3600); if (error) throw error; return data.signedUrl; },
+    // Si el mismo archivo ya está guardado (misma huella), no se vuelve a subir.
+    async subir(b, ruta, archivo) { const c = await SB.iniciar(); const {error} = await c.storage.from(b).upload(ruta, archivo, {upsert: false, contentType: archivo.type || undefined}); if (error && !/exist|duplicate/i.test(error.message || '')) throw error; },
+    // Los enlaces de los archivos duran 1 hora; se reusan mientras sigan vigentes en lugar de pedir uno nuevo cada vez.
+    async url(b, ruta) { const k = b + '/' + ruta, x = URLS.get(k); if (x && x.vence > Date.now() + 300000) return x.url;
+      const c = await SB.iniciar(); const {data, error} = await c.storage.from(b).createSignedUrl(ruta, 3600); if (error) throw error; URLS.set(k, {url: data.signedUrl, vence: Date.now() + 3600000}); return data.signedUrl; },
     // ¿Ya se corrió supabase.sql? Devuelve cuántas cuentas hay, o null si la base está vacía.
     async diagnostico() { const c = await SB.iniciar(); const {data, error} = await c.rpc('estado_demo'); return error ? null : data; }
   };
@@ -197,8 +227,7 @@ async function vAlumnoTareas() {
       ${abierta && (!e || e.calificacion == null) ? `<label class="btn" style="flex-direction:row;color:#fff;font-size:13px;cursor:pointer">${ic('subir', 'style="width:16px;height:16px"')} ${e ? 'Cambiar archivo' : 'Subir mi entrega'}<input type="file" data-t="${t.id}" hidden></label>` : ''}</div>`}
     </article>`; }).join('') || '<div class="vacio">No tienes tareas.</div>'}</section>`;
   main().onchange = async e => { const i = e.target.closest('input[data-t]'); if (!i?.files[0]) return; const f = i.files[0]; if (f.size > 25 * 1048576) return alert('El archivo pesa más de 25 MB.');
-    const ruta = `${i.dataset.t}/${yo.id}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g, '_')}`;
-    try { await db().subir('entregas', ruta, f); await db().upsert('entregas', [{tarea_id: +i.dataset.t, alumno_id: yo.id, archivo_ruta: ruta, archivo_nombre: f.name, entregada_en: new Date().toISOString()}], 'tarea_id,alumno_id'); alert(`Listo: "${f.name}" quedó entregado.`); vAlumnoTareas(); }
+    try { const {ruta} = await ARCHIVOS.guardar('entregas', `${i.dataset.t}/${yo.id}`, f); await db().upsert('entregas', [{tarea_id: +i.dataset.t, alumno_id: yo.id, archivo_ruta: ruta, archivo_nombre: f.name, entregada_en: new Date().toISOString()}], 'tarea_id,alumno_id'); alert(`Listo: "${f.name}" quedó entregado.`); vAlumnoTareas(); }
     catch (x) { alert('No se pudo entregar: ' + x.message); } };
   main().onclick = async e => { const b = e.target.closest('[data-ver-entrega]'); if (!b) return; try { VISOR.abrir({nombre: b.dataset.n, url: await db().url('entregas', b.dataset.verEntrega)}); } catch (x) { alert('No se pudo abrir: ' + x.message); } };
 }
@@ -264,7 +293,7 @@ async function vMensajes(ruta, grupoProf, cont) {
     const fila = {de: yo.id, texto: texto || null};
     if (c.id.startsWith('grupo:')) fila.grupo_id = c.id.slice(6); else fila.para = c.id;
     try {
-      if (adj) { const ruta2 = `${yo.id}/${Date.now()}-${adj.nombre.replace(/[^\w.\-]+/g, '_')}`; await db().subir('adjuntos', ruta2, adj.blob); Object.assign(fila, {adjunto_ruta: ruta2, adjunto_nombre: adj.nombre, adjunto_tipo: adj.blob.type || ''}); }
+      if (adj) { const {ruta, archivo} = await ARCHIVOS.guardar('adjuntos', yo.id, adj.blob instanceof File ? adj.blob : new File([adj.blob], adj.nombre, {type: adj.blob.type})); Object.assign(fila, {adjunto_ruta: ruta, adjunto_nombre: archivo.name === adj.nombre || !/\.webp$/.test(archivo.name) ? adj.nombre : adj.nombre.replace(/\.\w+$/, '') + '.webp', adjunto_tipo: archivo.type || ''}); }
       await db().insertar('mensajes', [fila]); recargar();
     } catch (x) { alert('No se pudo enviar: ' + x.message); }
   });

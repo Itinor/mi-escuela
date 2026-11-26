@@ -227,9 +227,8 @@ Object.assign(PERSISTIR, {
   notas(g, gp) { const G = grupoDe(g); return gNotas({id: g, nivel: G.nivel}, ALUMNOS_G[g].map(([id, nombre]) => ({id, nombre})), gp); },
   url: (b, ruta) => !ruta || ruta === '__ejemplo' ? Promise.resolve('ejemplos/trabajo_ejemplo.pdf') : db().url(b, ruta),
   async entregaAlumno(t, f) {
-    const ruta = `${t.id}/${C.yo.id}/${Date.now()}-${f.name.replace(/[^\w.\-]+/g, '_')}`;
-    await db().subir('entregas', ruta, f);
-    await db().upsert('entregas', [{tarea_id: t.id, alumno_id: C.yo.id, archivo_ruta: ruta, archivo_nombre: f.name, entregada_en: new Date().toISOString()}], 'tarea_id,alumno_id');
+    const {ruta, archivo} = await ARCHIVOS.guardar('entregas', `${t.id}/${C.yo.id}`, f);
+    await db().upsert('entregas', [{tarea_id: t.id, alumno_id: C.yo.id, archivo_ruta: ruta, archivo_nombre: archivo.name, entregada_en: new Date().toISOString()}], 'tarea_id,alumno_id');
     t.ruta = ruta;
   }
 });

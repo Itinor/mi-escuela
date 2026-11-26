@@ -798,7 +798,7 @@ function conectarEscribir(form,enviar){ // enviar(texto, adjunto|null)
   if(GRAB.rec){GRAB.rec.stop();return}
   if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)return alert('Este navegador no deja grabar audio aquí. Puedes mandar un audio con el clip.');
   let st;try{st=await navigator.mediaDevices.getUserMedia({audio:true})}catch(err){return alert('No se pudo usar el micrófono. Revisa que el navegador tenga permiso.')}
-  const rec=new MediaRecorder(st),partes=[],t0=Date.now(),ph=tx.placeholder;GRAB.rec=rec;GRAB.cancelar=false;
+  const rec=new MediaRecorder(st,{audioBitsPerSecond:24000}),partes=[],t0=Date.now(),ph=tx.placeholder;GRAB.rec=rec;GRAB.cancelar=false;
   gb.classList.add('on');tx.disabled=true;
   const tm=setInterval(()=>{const s=Math.floor((Date.now()-t0)/1000);tx.placeholder=`Grabando ${Math.floor(s/60)}:${String(s%60).padStart(2,'0')} · toca el micrófono para enviar`},250);
   rec.ondataavailable=e=>partes.push(e.data);

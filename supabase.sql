@@ -608,3 +608,6 @@ begin
    (tb, mb, null, 'Buenas tardes. Pedro va muy bien; solo le recomiendo repasar estequiometría antes del examen.', now() - interval '2 days'),
    (mb, tb, null, 'Gracias, maestra. ¿Hay asesorías de Química antes del examen?', now() - interval '1 day');
 end $$;
+
+-- Que la API de Supabase vea de inmediato las tablas nuevas (calendario, pagos, historial…).
+notify pgrst, 'reload schema';

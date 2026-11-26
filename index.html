@@ -205,6 +205,16 @@ a.tarjeta{transition:transform .22s ease,box-shadow .22s ease}
  .adj-arch:hover{transform:scale(1.02)}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}.revela{opacity:1;transform:none}}
+.editor{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--linea);padding-top:12px}
+.editor>b{font-size:13px;margin-top:4px}
+.rubro{display:grid;grid-template-columns:1.2fr 1fr 96px 40px;gap:8px;align-items:center;margin-bottom:8px}
+.rubro input,.rubro select{padding:10px 12px}
+.rubro .rp{display:flex;align-items:center;gap:4px;font-weight:600;color:var(--gris)}
+.rubro .rx{border:0;background:var(--malf);color:var(--mal);border-radius:10px;height:40px;display:grid;place-items:center}
+.rubro .rx svg{width:16px;height:16px}
+.mini-btn{border:0;background:var(--suave);color:var(--marca);border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700;margin-top:4px}
+.prof .mini-btn{color:#1F5F45}
+input.cap{width:72px;padding:6px 8px;text-align:right;border-radius:8px}
 .solo-movil{display:none}
 .inferior{display:none}
 .hoja-fondo{position:fixed;inset:0;background:rgba(28,20,38,.4);z-index:20;display:flex;align-items:flex-end;justify-content:center}
@@ -229,6 +239,8 @@ a.tarjeta{transition:transform .22s ease,box-shadow .22s ease}
   .hor .b{grid-template-columns:62px 1fr;gap:10px}
   .solo-escritorio{display:none}
   .chat{grid-template-columns:1fr}
+  .rubro{grid-template-columns:1fr 84px 40px}
+  .rubro .rf{grid-column:1/-1;grid-row:2}
   .visor-fondo{padding:0;align-items:stretch}
   .prof .barra{background:#145536}
   .detalle{border-radius:0;max-height:100%;height:100%;max-width:none}
@@ -394,14 +406,6 @@ const EXAMENES={};
 for(const g of GRUPOS_PROF){const r=azar('exam'+g.id);EXAMENES[g.id]={};
  for(const [m] of ALUMNOS_G[g.id]){EXAMENES[g.id][m]={};for(const p of CAL.parciales)if(yaPaso(p.examen)||fTxt(hoy0())===p.examen)EXAMENES[g.id][m][p.n]=Math.max(30,Math.min(100,Math.round(NIVEL[g.id+m]+(r()-.5)*18)))}}
 
-// Ponderación de cada grupo (cátedra libre). Recomendación de rectoría: 30 % trabajos y asistencia, 70 % examen.
-// Forma de calificar recomendada por dirección: aplica a todos los grupos mientras el profesor no la cambie.
-// trab/asis/exam = % dentro de cada parcial (suman 100). final = % del semestre que vale el examen final (0 = sin examen final).
-const DIRECCION={trab:20,asis:10,exam:70,final:0};
-const EXAMEN_FINAL='10/12/2026';
-const PONDER={A2:{trab:0,asis:0,exam:100,final:0}}; // A2: la profesora decidió calificar solo con exámenes
-const pond=g=>PONDER[g]||DIRECCION;
-const resumenW=w=>`Trabajos ${w.trab} % · Asistencia ${w.asis} % · Examen ${w.exam} % en cada parcial${w.final?` · Examen final ${w.final} % del semestre`:''}`;
 
 // Mensajes del profesor: grupales e individuales. Los de Pedro (A3) se comparten con su vista de alumno (MENSAJES['21E035']).
 const MSG_GRUPO={A1:[],A2:[],A3:[],A4:[]},MSG_IND={A1:{},A2:{},A3:{},A4:{}};
@@ -415,21 +419,62 @@ function enviarProf(g,dest,txt,adj=null){const f=ahoraTxt();
  else hiloInd(g,dest).push(['prof',txt,f,null,adj])}
 const sinLeer=(g,m)=>{const h=hiloInd(g,m);return h.length&&h.at(-1)[0]==='alumno'};
 
-// Calificación de un parcial: trabajos (no entregado = 0; entregado sin calificar no cuenta), asistencia (presente o retardo cuenta) y examen.
-function calcParcial(g,m,n){
- const w=pond(g),ts=TAREAS_G[g].filter(t=>t.parcial===n&&aFecha(t.entrega)<=hoy0());
- let s=0,c=0,pend=0,ent=0,falt=0;for(const t of ts){const e=t.entregas[m];if(!e){c++;falt++}else if(e.calif==null){pend++;ent++}else{s+=e.calif;c++;ent++}}
- const p=CAL.parciales[n-1],ses=SABADOS.filter(f=>aFecha(f)>=aFecha(p.del)&&aFecha(f)<=aFecha(p.al)&&ASIST[g][f]&&ASIST[g][f][m]);
- const cuenta=k=>ses.filter(f=>ASIST[g][f][m]===k).length,P=cuenta('P'),R=cuenta('R'),F=cuenta('F');
- const trab=c?s/c:null,asis=ses.length?(P+R)/ses.length*100:null,exam=EXAMENES[g][m]?.[n]??null;
- const partes=[['trab',trab],['asis',asis],['exam',exam]];
- const falta=partes.some(([k,v])=>w[k]>0&&v==null);
- const final=falta?null:Math.round(partes.reduce((a,[k,v])=>a+(w[k]?v*w[k]/100:0),0)*10)/10;
- return {ts,trab,ent,pend,falt,total:ts.length,ses:ses.length,P,R,F,asis,exam,final,abierto:!yaPaso(p.al)};
+// ---- Forma de calificar ----
+// Cada forma: cuántos parciales (0 = sin parciales), rubros con su % y de dónde sale la calificación, y cuánto vale el examen final del semestre.
+// fuente: 'trabajos' (tareas de la plataforma), 'asistencia' (pase de lista), 'examen' (examen de cada parcial),
+//         'final' (examen final, cuando no hay parciales) o 'manual' (el profesor captura la calificación: participación, proyecto, exposición…).
+// Dirección recomienda una; aplica a todos los grupos mientras el profesor no la cambie (libertad de cátedra).
+const DIRECCION={nombre:'La de dirección',parciales:3,final:0,comps:[{id:'t',nombre:'Trabajos',pct:20,fuente:'trabajos'},{id:'a',nombre:'Asistencia',pct:10,fuente:'asistencia'},{id:'e',nombre:'Examen',pct:70,fuente:'examen'}]};
+const EXAMEN_FINAL='10/12/2026';
+const MIS_FORMAS=[{nombre:'Solo exámenes',parciales:3,final:0,comps:[{id:'e',nombre:'Examen',pct:100,fuente:'examen'}]}];
+const PONDER={A2:JSON.parse(JSON.stringify(MIS_FORMAS[0]))}; // A2: la profesora califica solo con exámenes
+const HIST={A1:[],A2:[{fecha:'20/08 · 09:15',texto:'La de dirección → Solo exámenes'}],A3:[],A4:[]};
+const MANUAL={}; // MANUAL[grupo][idRubro][periodo][matrícula] = calificación capturada
+const esq=g=>PONDER[g]||DIRECCION;
+const copiaEsq=e=>JSON.parse(JSON.stringify(e));
+const firmaEsq=e=>JSON.stringify([e.parciales,e.final,e.comps.map(c=>[c.nombre.trim(),+c.pct,c.fuente])]);
+const resumenEsq=e=>`${e.parciales?e.parciales+(e.parciales>1?' parciales':' parcial'):'Sin parciales'} · ${e.comps.map(c=>`${c.nombre} ${c.pct} %`).join(' · ')}${e.parciales&&e.final?` · Examen final ${e.final} % del semestre`:''}`;
+const r1=x=>Math.round(x*10)/10;
+
+// Periodos según cuántos parciales elige el profesor. Con 3 se usa el calendario escolar; con 1 o 2 se reparte el semestre.
+function periodos(g){
+ const k=esq(g).parciales;if(k===3)return CAL.parciales;
+ const n=k||1,cl=SABADOS,tam=Math.ceil(cl.length/n);
+ return Array.from({length:n},(_,i)=>{const tr=cl.slice(i*tam,(i+1)*tam),clases=tr.filter(conClase);
+  return {n:i+1,del:i===0?CAL.inicio:tr[0],al:i===n-1?CAL.fin:tr.at(-1),examen:k?clases.at(-1):null}});
 }
-function calcSemestre(g,m){const w=pond(g),ps=CAL.parciales.map(p=>calcParcial(g,m,p.n)).filter(c=>!c.abierto&&c.final!=null).map(c=>c.final);if(!ps.length)return null;
- const p=ps.reduce((a,b)=>a+b,0)/ps.length,ef=EXAMENES[g][m]?.final;
- return Math.round((w.final&&ef!=null?p*(100-w.final)/100+ef*w.final/100:p)*10)/10}
+const periodoDe=(g,f)=>(periodos(g).find(p=>aFecha(f)>=aFecha(p.del)&&aFecha(f)<=aFecha(p.al))||periodos(g).at(-1)).n;
+const etiquetaPeriodo=(g,f)=>esq(g).parciales?`Parcial ${periodoDe(g,f)}`:'Semestre';
+function examenDe(g,m,n){
+ const k=esq(g).parciales;if(!k)return null;const p=periodos(g)[n-1];if(!p.examen||!(yaPaso(p.examen)||p.examen===fTxt(hoy0())))return null;
+ if(k===3)return EXAMENES[g][m]?.[n]??null;
+ return Math.max(30,Math.min(100,Math.round(NIVEL[g+m]+(azar(`ex${g}${m}${k}${n}`)()-.5)*18)));
+}
+const finalDe=(g,m)=>EXAMENES[g][m]?.final??null; // el examen final se aplica el 10/12
+
+// Calificación de un periodo. Tareas: no entregada = 0; entregada sin calificar no cuenta todavía. Asistencia: presente o retardo cuenta.
+function calcPeriodo(g,m,n){
+ const E=esq(g),per=periodos(g)[n-1],en=f=>aFecha(f)>=aFecha(per.del)&&aFecha(f)<=aFecha(per.al);
+ const ts=TAREAS_G[g].filter(t=>en(t.entrega)&&aFecha(t.entrega)<=hoy0());
+ let s=0,c=0,pend=0,ent=0,falt=0;for(const t of ts){const e=t.entregas[m];if(!e){c++;falt++}else if(e.calif==null){pend++;ent++}else{s+=e.calif;c++;ent++}}
+ const ses=SABADOS.filter(f=>en(f)&&ASIST[g][f]&&ASIST[g][f][m]),cuenta=k=>ses.filter(f=>ASIST[g][f][m]===k).length,P=cuenta('P'),R=cuenta('R'),F=cuenta('F');
+ const val={trabajos:c?s/c:null,asistencia:ses.length?(P+R)/ses.length*100:null,examen:examenDe(g,m,n),final:finalDe(g,m)};
+ const partes=E.comps.map(cp=>({cp,v:cp.fuente==='manual'?(MANUAL[g]?.[cp.id]?.[n]?.[m]??null):val[cp.fuente]}));
+ const activos=partes.filter(x=>x.cp.pct>0),falta=activos.filter(x=>x.v==null),con=activos.filter(x=>x.v!=null),pctCon=con.reduce((a,x)=>a+ +x.cp.pct,0);
+ return {per,ts,ent,pend,falt,total:ts.length,ses:ses.length,P,R,F,partes,falta,
+  final:falta.length?null:r1(activos.reduce((a,x)=>a+x.v*x.cp.pct/100,0)),
+  alMomento:pctCon?r1(con.reduce((a,x)=>a+x.v*x.cp.pct,0)/pctCon):null,abierto:!yaPaso(per.al)};
+}
+// Semestre: promedio de parciales cerrados (y examen final si lo hay). Sin parciales: la calificación de todo el semestre.
+function calcSemestre(g,m){
+ const E=esq(g),ps=periodos(g).map(p=>calcPeriodo(g,m,p.n));
+ if(!E.parciales)return ps[0].abierto?null:ps[0].final;
+ const ce=ps.filter(c=>!c.abierto&&c.final!=null).map(c=>c.final);if(!ce.length)return null;
+ const p=ce.reduce((a,b)=>a+b,0)/ce.length,ef=finalDe(g,m);
+ return r1(E.final&&ef!=null?p*(100-E.final)/100+ef*E.final/100:p);
+}
+// Lo que lleva hasta hoy (incluye el parcial en curso con lo que ya está calificado).
+function alMomentoSem(g,m){const ps=periodos(g).map(p=>calcPeriodo(g,m,p.n)).map(c=>c.final??c.alMomento).filter(x=>x!=null);return ps.length?r1(ps.reduce((a,b)=>a+b,0)/ps.length):null}
 
 const RUTAS=[
  ['inicio','Inicio','inicio','Escolar'],['calificaciones','Calificaciones','calif','Escolar'],['kardex','Kárdex','kardex','Escolar'],['horario','Horario','reloj','Escolar'],['faltas','Faltas','faltas','Escolar'],['actividades','Tareas','act','Escolar'],['mensajes','Mensajes','msg','Escolar'],['calendario','Calendario','cal','Escolar'],
@@ -811,7 +856,7 @@ function pintarListaG(g,fecha){
   <button class="btn" id="lguardar">Guardar lista</button>
   <span style="font-size:12px;color:var(--gris);text-align:center">P = presente · R = retardo · F = falta. Cada alumno ve su asistencia al momento en su sección de Faltas.</span>`;
  }
- gp.innerHTML=`<section class="tarjeta"><div class="fila"><h2>Pase de lista · sábado ${fCorta(fecha)}</h2><span class="chip">Parcial ${parcialDe(fecha)}</span></div>
+ gp.innerHTML=`<section class="tarjeta"><div class="fila"><h2>Pase de lista · sábado ${fCorta(fecha)}</h2><span class="chip">${etiquetaPeriodo(g,fecha)}</span></div>
   <div class="fechas" id="lfs">${chips}</div>
   <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--gris)"><span><i class="pt tomada"></i>Lista tomada</span><span><i class="pt pend"></i>Falta tomar lista</span><span><i class="pt sin"></i>Sin clase (calendario)</span><span><i class="pt futura"></i>Próximas</span></div>
   <div style="display:flex;flex-direction:column;gap:12px">${cuerpo}</div></section>`;
@@ -846,7 +891,7 @@ function pintarTareasG(g){
  }
  if(tid){
   const t=TAREAS_G[g].find(x=>x.id===tid),E=t.entregas,ent=A.filter(([m])=>E[m]),cal=ent.filter(([m])=>E[m].calif!=null);
-  gp.innerHTML=`<section class="tarjeta"><div class="fila" style="align-items:flex-start"><div><span style="font-size:12px;color:var(--gris)">Parcial ${t.parcial} · entrega ${t.entrega} ${t.hora}</span><h2>${t.titulo}</h2></div><button class="btn sec" id="tvolver" style="padding:8px 12px;font-size:13px">← Tareas</button></div>
+  gp.innerHTML=`<section class="tarjeta"><div class="fila" style="align-items:flex-start"><div><span style="font-size:12px;color:var(--gris)">${etiquetaPeriodo(g,t.entrega)} · entrega ${t.entrega} ${t.hora}</span><h2>${t.titulo}</h2></div><button class="btn sec" id="tvolver" style="padding:8px 12px;font-size:13px">← Tareas</button></div>
    <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip">${ent.length} de ${A.length} entregaron</span><span class="chip ok">${cal.length} calificadas</span>${ent.length-cal.length?`<span class="chip aviso">${ent.length-cal.length} por calificar</span>`:''}${A.length-ent.length?`<span class="chip mal">${A.length-ent.length} sin entregar</span>`:''}</div>
    <div class="lista">${A.slice().sort((a,b)=>{const r=x=>!E[x[0]]?2:E[x[0]].calif==null?0:1;return r(a)-r(b)}).map(([m,nom])=>{const e=E[m];
     return `<div class="it"><div class="t"><b>${nom}</b><span>${e?`${esc(e.archivo)} · ${e.fecha}`:yaPaso(t.entrega)?'No entregó':'Todavía no entrega'}</span></div>
@@ -859,7 +904,7 @@ function pintarTareasG(g){
  const lista=TAREAS_G[g].slice().sort((a,b)=>aFecha(b.entrega)-aFecha(a.entrega));
  gp.innerHTML=`<section class="tarjeta"><div class="fila"><h2>Tareas del grupo</h2><button class="btn" id="tnueva" style="padding:9px 14px;font-size:13px">+ Nueva tarea</button></div>
   <div class="lista">${lista.map(t=>{const n=Object.keys(t.entregas).length,pc=Object.values(t.entregas).filter(e=>e.calif==null).length;
-   return `<a class="it" href="#" data-t="${t.id}" style="color:inherit"><div class="t"><b>${t.titulo}</b><span>Parcial ${t.parcial} · entrega ${t.entrega}${yaPaso(t.entrega)?'':' · abierta'}</span></div>
+   return `<a class="it" href="#" data-t="${t.id}" style="color:inherit"><div class="t"><b>${t.titulo}</b><span>${etiquetaPeriodo(g,t.entrega)} · entrega ${t.entrega}${yaPaso(t.entrega)?'':' · abierta'}</span></div>
    <span class="chip">${n}/${A.length}</span>${pc?`<span class="chip aviso">${pc} por calificar</span>`:n?'<span class="chip ok">Calificada</span>':''}</a>`}).join('')}</div></section>`;
  gp.onclick=e=>{if(e.target.id==='tnueva'){estadoProf.tarea[g]='nueva';return pintarTareasG(g)}const a=e.target.closest('[data-t]');if(a){e.preventDefault();estadoProf.tarea[g]=+a.dataset.t;pintarTareasG(g)}};
 }
@@ -900,71 +945,131 @@ function pintarMensajesG(g){
 }
 
 // ----- Calificaciones y estadísticas -----
+const FUENTES={trabajos:'Tareas de la plataforma',asistencia:'Pase de lista',examen:'Examen del parcial',final:'Examen final',manual:'Yo capturo la calificación'};
+const sinAcentos=t=>t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+const num=(v,d=0)=>v==null?'—':(+v).toFixed(d);
+
+function editorHTML(g,st){
+ const B=st.borrador,k=B.parciales,fu=k?['trabajos','asistencia','examen','manual']:['trabajos','asistencia','final','manual'];
+ const q=sinAcentos(st.buscaG||''),gs=GRUPOS_PROF.filter(x=>!q||sinAcentos(`${x.id} ${nomMat(x.cl)}`).includes(q));
+ return `<div class="editor">
+  <b>Formas guardadas</b>
+  <div class="rapidas" id="eforms">${[DIRECCION,...MIS_FORMAS].map((f,i)=>`<button data-forma="${i}" class="${firmaEsq(f)===firmaEsq(B)?'on':''}">${esc(f.nombre)}${i===0?' (recomendada)':''}</button>`).join('')}</div>
+  <b>¿Cómo divides el semestre?</b>
+  <div class="seg" id="ek">${[0,1,2,3].map(n=>`<button data-k="${n}" class="${k===n?'on P':''}">${n===0?'Sin parciales':n===1?'1 parcial':n+' parciales'}</button>`).join('')}</div>
+  <b>Rubros ${k?'de cada parcial':'de todo el semestre'}</b>
+  <div id="erubros">${B.comps.map((c,i)=>`<div class="rubro" data-i="${i}"><input class="rn" value="${esc(c.nombre)}" placeholder="Nombre (ej. Participación)" aria-label="Nombre del rubro"><select class="rf" aria-label="De dónde sale la calificación">${fu.map(f=>`<option value="${f}" ${c.fuente===f?'selected':''}>${FUENTES[f]}</option>`).join('')}</select><span class="rp"><input class="rpct" type="number" min="0" max="100" value="${c.pct}" aria-label="Porcentaje">%</span><button type="button" class="rx" aria-label="Quitar rubro">${ic('cerrar')}</button></div>`).join('')}</div>
+  <div class="fila"><button type="button" class="btn sec" id="emas" style="padding:8px 14px;font-size:13px">+ Agregar rubro</button><b id="esuma"></b></div>
+  ${k?`<label>Examen final: cuánto vale del semestre (0 = sin examen final)<input id="efinal" type="number" min="0" max="100" value="${B.final}" style="max-width:200px"></label>`:''}
+  <label style="flex-direction:row;align-items:center;gap:8px;color:var(--tinta)"><input type="checkbox" id="eguardar" style="width:auto" ${st.guardar?'checked':''}> Guardar como forma propia para reusarla</label>
+  <input id="enombre" placeholder="Nombre de tu forma (ej. Proyecto + examen final)" class="${st.guardar?'':'oculto'}" value="${esc(st.nombreG||'')}">
+  <b>¿A qué grupos se aplica?</b>
+  <input id="ebusca" placeholder="Buscar grupo (ej. A2 o Penal)" value="${esc(st.buscaG||'')}">
+  <div class="rapidas" id="egrupos">${gs.map(x=>`<button data-g="${x.id}" class="${st.sel.includes(x.id)?'on':''}">${x.id} · ${nomMat(x.cl)}</button>`).join('')||'<span style="font-size:13px;color:var(--gris)">Ningún grupo coincide.</span>'}<button data-todos="1" class="${st.sel.length===GRUPOS_PROF.length?'on':''}">Todos mis grupos</button></div>
+  <span style="font-size:12px;color:var(--gris)">Puedes cambiarla cuando quieras, incluso al final del semestre: las calificaciones se recalculan solas y queda registro del cambio.</span>
+  <span id="eerror" style="font-size:13px;color:var(--mal)"></span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="eaplicar">Aplicar a ${st.sel.length} grupo${st.sel.length!==1?'s':''}</button>${PONDER[g]?'<button class="btn sec" id="edir">Volver a la de dirección</button>':''}</div>
+ </div>`;
+}
+function leerBorrador(gp,st){
+ gp.querySelectorAll('#erubros .rubro').forEach(r=>{const c=st.borrador.comps[+r.dataset.i];c.nombre=r.querySelector('.rn').value;c.fuente=r.querySelector('.rf').value;c.pct=Number(r.querySelector('.rpct').value)||0});
+ const f=gp.querySelector('#efinal');if(f)st.borrador.final=Number(f.value)||0;
+}
+function sumaRubros(gp,st){if(!st.editar||!st.borrador)return;const s=st.borrador.comps.reduce((a,c)=>a+(+c.pct||0),0),el=gp.querySelector('#esuma');if(el){el.textContent=`Suma: ${s} %${s===100?' ✓':' (tiene que dar 100 %)'}`;el.style.color=s===100?'var(--ok)':'var(--mal)'}}
+
 function pintarCalifG(g){
- const gp=document.getElementById('gp'),st=estadoProf.cal[g]||(estadoProf.cal[g]={vista:'sem',orden:'prom',busca:'',editar:false}),w=pond(g),A=ALUMNOS_G[g];
- const filas=A.map(([m,nom])=>{const ps=CAL.parciales.map(p=>calcParcial(g,m,p.n));return {m,nom,ps,sem:calcSemestre(g,m)}});
- const valor=f=>st.vista==='sem'?f.sem:f.ps[+st.vista.slice(1)-1].final;
- const vals=filas.map(valor).filter(x=>x!=null),promG=prom2(vals);
- const mejor=filas.filter(f=>valor(f)!=null).sort((a,b)=>valor(b)-valor(a))[0];
- let ver=filas.filter(f=>!st.busca||f.nom.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').includes(st.busca)||f.m.includes(st.busca));
- const rank=filas.filter(f=>valor(f)!=null).sort((a,b)=>valor(b)-valor(a)).map(f=>f.m);
+ const gp=document.getElementById('gp'),st=estadoProf.cal[g]||(estadoProf.cal[g]={vista:'sem',orden:'prom',busca:'',editar:false}),E=esq(g),A=ALUMNOS_G[g],k=E.parciales,PS=periodos(g);
+ if(st.vista!=='sem'&&(!k||+st.vista.slice(1)>k))st.vista='sem';
+ const filas=A.map(([m,nom])=>({m,nom,ps:PS.map(p=>calcPeriodo(g,m,p.n)),sem:calcSemestre(g,m),hoy:alMomentoSem(g,m)}));
+ const per=f=>st.vista==='sem'?(k?null:f.ps[0]):f.ps[+st.vista.slice(1)-1];
+ const valor=f=>{const p=per(f);return p?(p.final??p.alMomento):(f.sem??f.hoy)};
+ const vals=filas.map(valor).filter(x=>x!=null),promG=prom2(vals),orden=filas.filter(f=>valor(f)!=null).sort((a,b)=>valor(b)-valor(a)),mejor=orden[0],rank=orden.map(f=>f.m);
+ const ver=filas.filter(f=>!st.busca||sinAcentos(f.nom).includes(st.busca)||f.m.includes(st.busca));
  ver.sort(st.orden==='nombre'?(a,b)=>a.nom.localeCompare(b.nom):st.orden==='riesgo'?(a,b)=>(valor(a)??999)-(valor(b)??999):(a,b)=>(valor(b)??-1)-(valor(a)??-1));
- const enCurso=n=>!(yaPaso(CAL.parciales[n-1].examen));
- const num=(v,d=0)=>v==null?'—':(+v).toFixed(d);
- const cab=st.vista==='sem'?`<th class="num">P1</th><th class="num">P2</th><th class="num">P3</th>${w.final?`<th class="num">Final</th>`:''}<th class="num">Promedio</th>`:`<th class="num ocultar-movil">Trabajos</th><th class="num ocultar-movil">Asist.</th><th class="num ocultar-movil">Examen</th><th class="num">Calif.</th>`;
- const celdas=f=>{if(st.vista==='sem')return f.ps.map((p,i)=>`<td class="num">${p.final==null?`<span style="color:var(--gris);font-size:12px">${enCurso(i+1)?'en curso':'—'}</span>`:p.abierto?`<span style="color:var(--gris)">${num(p.final,1)}<br><span style="font-size:11px">en curso</span></span>`:num(p.final,1)}</td>`).join('')+(w.final?`<td class="num">${EXAMENES[g][f.m]?.final??`<span style="color:var(--gris);font-size:12px">${fCorta(EXAMEN_FINAL)}</span>`}</td>`:'')+`<td class="num"><b style="color:${colorNota(f.sem)}">${num(f.sem,1)}</b></td>`;
-  const p=f.ps[+st.vista.slice(1)-1];return `<td class="num ocultar-movil">${num(p.trab)}</td><td class="num ocultar-movil">${p.asis==null?'—':num(p.asis)+' %'}</td><td class="num ocultar-movil">${num(p.exam)}</td><td class="num"><b style="color:${colorNota(p.final)}">${p.final==null?'<span style="color:var(--gris);font-size:12px;font-weight:600">falta examen</span>':num(p.final,1)}</b></td>`};
+ const gris=(v,t)=>`<span style="color:var(--gris)">${v}<br><span style="font-size:11px">${t}</span></span>`;
+ const celdaPer=(p,n)=>{const r=p.partes.map(x=>{const id=`${x.cp.id}`;return x.cp.fuente==='manual'?`<td class="num"><input class="cap" type="number" min="0" max="100" data-c="${id}" data-n="${n}" data-m="${p.m}" value="${x.v??''}" placeholder="—" aria-label="${esc(x.cp.nombre)}"></td>`:`<td class="num ocultar-movil">${x.cp.fuente==='asistencia'&&x.v!=null?num(x.v)+' %':num(x.v)}</td>`}).join('');
+  return r+`<td class="num" data-fin="${p.m}">${califCelda(p)}</td>`};
+ const califCelda=p=>p.final!=null&&!p.abierto?`<b style="color:${colorNota(p.final)}">${num(p.final,1)}</b>`:p.final!=null?gris(num(p.final,1),'en curso'):p.alMomento!=null?gris(num(p.alMomento,1),'falta '+p.falta.map(x=>x.cp.nombre.toLowerCase()).join(', ')):'<span style="color:var(--gris);font-size:12px">—</span>';
+ let cab,cuerpo;
+ const rubrosCab=n=>E.comps.map(c=>c.fuente==='manual'?`<th class="num">${esc(c.nombre)} ${c.pct}%<br><button class="mini-btn" data-llenar="${c.id}" data-n="${n}">Llenar vacíos</button></th>`:`<th class="num ocultar-movil">${esc(c.nombre)} ${c.pct}%</th>`).join('');
+ if(st.vista==='sem'&&k){
+  cab=PS.map(p=>`<th class="num">P${p.n}</th>`).join('')+(E.final?'<th class="num">Final</th>':'')+'<th class="num">Semestre</th>';
+  cuerpo=f=>f.ps.map(p=>`<td class="num">${p.final!=null&&!p.abierto?num(p.final,1):p.final!=null||p.alMomento!=null?gris(num(p.final??p.alMomento,1),'en curso'):'—'}</td>`).join('')+(E.final?`<td class="num">${finalDe(g,f.m)??`<span style="color:var(--gris);font-size:12px">${fCorta(EXAMEN_FINAL)}</span>`}</td>`:'')+`<td class="num">${f.sem!=null?`<b style="color:${colorNota(f.sem)}">${num(f.sem,1)}</b>`:f.hoy!=null?gris(num(f.hoy,1),'al momento'):'—'}</td>`;
+ }else{const n=st.vista==='sem'?1:+st.vista.slice(1);cab=rubrosCab(n)+`<th class="num">${k?'Parcial':'Calificación'}</th>`;cuerpo=f=>celdaPer({...f.ps[n-1],m:f.m},n)}
+ const vistas=k?[...PS.map(p=>[`p${p.n}`,`Parcial ${p.n}${!yaPaso(p.al)?' · en curso':''}`]),['sem','Semestre']]:[['sem','Semestre (sin parciales)']];
  gp.innerHTML=`
-  <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><div style="flex:1;min-width:220px"><h2>Cómo califico a este grupo</h2><span style="font-size:13px;color:var(--gris)">${resumenW(w)}</span></div>${PONDER[g]?'<span class="chip aviso">Personalizada por ti</span>':'<span class="chip ok">Recomendación de dirección</span>'}<button class="btn sec" id="cedit" style="padding:8px 12px;font-size:13px">${st.editar?'Cerrar':'Cambiar'}</button></div>
-   ${st.editar?`<span style="font-size:13px;color:var(--gris)">Dirección recomienda: ${resumenW(DIRECCION)}. Tienes libertad de cátedra: si no la cambias, se usa la de dirección.</span>
-   <div class="rapidas"><button data-pre="20,10,70,0">La de dirección (30 / 70)</button><button data-pre="0,0,100,0">Solo exámenes</button><button data-pre="20,10,70,40">Parciales + examen final 40 %</button><button data-pre="90,10,0,50">Trabajos y un solo examen final</button></div>
-   <b style="font-size:13px">Dentro de cada parcial (deben sumar 100 %)</b>
-   <div class="form"><label>Trabajos %<input id="pw1" type="number" min="0" max="100" value="${w.trab}"></label><label>Asistencia %<input id="pw2" type="number" min="0" max="100" value="${w.asis}"></label><label>Examen del parcial %<input id="pw3" type="number" min="0" max="100" value="${w.exam}"></label></div>
-   <label>Examen final: cuánto vale del semestre (0 = sin examen final)<input id="pw4" type="number" min="0" max="100" value="${w.final}" style="max-width:220px"></label>
-   <b style="font-size:13px">¿A qué grupos se aplica?</b>
-   <div class="rapidas" id="palc"><button data-a="uno" class="on">Solo al grupo ${g}</button><button data-a="todos">A todos mis grupos (${GRUPOS_PROF.map(x=>x.id).join(', ')})</button></div>
-   <span id="psuma" style="font-size:12px;color:var(--gris)">Los alumnos ven cómo se les califica en cada materia.</span>
-   <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="paplicar">Aplicar</button>${PONDER[g]?'<button class="btn sec" id="pdir">Volver a la de dirección</button>':''}</div>`:''}</section>
-  <div class="tabs" id="cv">${[['p1','Parcial 1'],['p2','Parcial 2'],['p3','Parcial 3'],['sem','Semestre']].map(([k,t])=>`<button data-v="${k}" class="${st.vista===k?'activo':''}">${t}${k!=='sem'&&enCurso(+k[1])?' · en curso':''}</button>`).join('')}</div>
+  <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><div style="flex:1;min-width:220px"><h2>Cómo califico a este grupo</h2><span style="font-size:13px;color:var(--gris)">${esc(E.nombre)}: ${resumenEsq(E)}</span></div>${PONDER[g]?'<span class="chip aviso">Personalizada por ti</span>':'<span class="chip ok">Recomendación de dirección</span>'}<button class="btn sec" id="cedit" style="padding:8px 12px;font-size:13px">${st.editar?'Cerrar':'Cambiar'}</button></div>
+   ${HIST[g].length&&!st.editar?`<span style="font-size:12px;color:var(--gris)">Último cambio: ${HIST[g].at(-1).fecha} · ${esc(HIST[g].at(-1).texto)}${HIST[g].length>1?` (${HIST[g].length} cambios)`:''}</span>`:''}
+   ${st.editar?editorHTML(g,st):''}</section>
+  <div class="tabs" id="cv">${vistas.map(([v,t])=>`<button data-v="${v}" class="${st.vista===v?'activo':''}">${t}</button>`).join('')}</div>
   <div class="rejilla">
    <section class="tarjeta dato"><small>Promedio del grupo</small><b>${num(promG,1)}</b><span>${vals.length} de ${A.length} con calificación</span></section>
    <section class="tarjeta dato"><small>Mejor promedio</small><b>${mejor?num(valor(mejor),1):'—'}</b><span>${mejor?mejor.nom:'Aún sin datos'}</span></section>
    <section class="tarjeta dato"><small>Aprobados (${CAL.minima} o más)</small><b>${vals.filter(v=>v>=CAL.minima).length}/${vals.length}</b><span>${vals.filter(v=>v<70).length} en riesgo (menos de 70)</span></section>
-  </div>${st.vista==='sem'&&w.final&&!yaPaso(EXAMEN_FINAL)?`<span style="font-size:13px;color:var(--gris)">El examen final (${w.final} %) se aplica el ${EXAMEN_FINAL}. Mientras, el promedio es el de los parciales cerrados.</span>`:''}
-  <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><input id="cbusca" placeholder="Buscar alumno o matrícula" value="${esc(st.busca)}" style="flex:1;min-width:180px"><div class="tabs" id="cord">${[['prom','Mejor promedio'],['riesgo','En riesgo primero'],['nombre','Nombre']].map(([k,t])=>`<button data-o="${k}" class="suave ${st.orden===k?'activo':''}">${t}</button>`).join('')}</div></div>
-   <table><thead><tr><th>#</th><th>Alumno</th>${cab}</tr></thead><tbody>${ver.map(f=>`<tr data-al="${f.m}" style="cursor:pointer"><td style="color:var(--gris)">${rank.indexOf(f.m)+1||'—'}</td><td>${f.nom}<br><span style="font-size:12px;color:var(--gris)">${f.m} · ver desglose</span></td>${celdas(f)}</tr>`).join('')||`<tr><td colspan="6" class="vacio">Nadie coincide con “${esc(st.busca)}”.</td></tr>`}</tbody></table></section>`;
- const q=gp.querySelector('#cbusca');q.oninput=()=>{st.busca=q.value.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();const pos=q.selectionStart;pintarCalifG(g);const q2=gp.querySelector('#cbusca');q2.focus();q2.setSelectionRange(pos,pos)};
+  </div>${st.vista==='sem'?`<span style="font-size:13px;color:var(--gris)">${k?`El semestre es el promedio de los parciales cerrados${E.final?` y el examen final (${E.final} %) se aplica el ${EXAMEN_FINAL}`:''}. En gris: lo que llevan al momento.`:'En gris: lo que llevan al momento con lo ya calificado.'}</span>`:''}
+  <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><input id="cbusca" placeholder="Buscar alumno o matrícula" value="${esc(st.busca)}" style="flex:1;min-width:180px"><div class="tabs" id="cord">${[['prom','Mejor promedio'],['riesgo','En riesgo primero'],['nombre','Nombre']].map(([o,t])=>`<button data-o="${o}" class="suave ${st.orden===o?'activo':''}">${t}</button>`).join('')}</div></div>
+   <div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Alumno</th>${cab}</tr></thead><tbody>${ver.map(f=>`<tr data-al="${f.m}" style="cursor:pointer"><td style="color:var(--gris)">${rank.indexOf(f.m)+1||'—'}</td><td>${f.nom}<br><span style="font-size:12px;color:var(--gris)">${f.m} · ver desglose</span></td>${cuerpo(f)}</tr>`).join('')||`<tr><td colspan="9" class="vacio">Nadie coincide con “${esc(st.busca)}”.</td></tr>`}</tbody></table></div></section>`;
+ sumaRubros(gp,st);
+ const q=gp.querySelector('#cbusca');q.oninput=()=>{st.busca=sinAcentos(q.value).trim();const pos=q.selectionStart;pintarCalifG(g);const q2=gp.querySelector('#cbusca');q2.focus();q2.setSelectionRange(pos,pos)};
+ const eb=gp.querySelector('#ebusca');if(eb)eb.oninput=()=>{leerBorrador(gp,st);st.buscaG=eb.value;const pos=eb.selectionStart;pintarCalifG(g);const e2=gp.querySelector('#ebusca');e2.focus();e2.setSelectionRange(pos,pos)};
+ gp.oninput=e=>{if(e.target.id==='enombre')st.nombreG=e.target.value;if(e.target.closest('#erubros')||e.target.id==='efinal'){leerBorrador(gp,st);sumaRubros(gp,st)}};
+ gp.onchange=e=>{
+  if(e.target.id==='eguardar'){st.guardar=e.target.checked;gp.querySelector('#enombre').classList.toggle('oculto',!st.guardar);if(st.guardar)gp.querySelector('#enombre').focus();return}
+  const cp=e.target.closest('.cap');if(cp){const {c,n,m}=cp.dataset,v=cp.value===''?null:Math.max(0,Math.min(100,Number(cp.value)));
+   const M=((MANUAL[g]??={})[c]??={})[n]??={};if(v==null)delete M[m];else M[m]=v;
+   const p=calcPeriodo(g,m,+n);gp.querySelector(`[data-fin="${m}"]`).innerHTML=califCelda(p)}
+ };
+ gp.onkeydown=e=>{const cp=e.target.closest('.cap');if(cp&&e.key==='Enter'){e.preventDefault();cp.blur();const ins=[...gp.querySelectorAll(`.cap[data-c="${cp.dataset.c}"]`)],sig=ins[ins.indexOf(cp)+1];if(sig)sig.focus()}};
  gp.onclick=e=>{
-  if(e.target.id==='cedit'){st.editar=!st.editar;return pintarCalifG(g)}
-  const pre=e.target.closest('[data-pre]');if(pre){pre.dataset.pre.split(',').forEach((v,i)=>gp.querySelector('#pw'+(i+1)).value=v)}
-  const al=e.target.closest('#palc button');if(al)gp.querySelectorAll('#palc button').forEach(x=>x.classList.toggle('on',x===al));
-  if(e.target.id==='pdir'){delete PONDER[g];st.editar=false;return pintarCalifG(g)}
-  if(e.target.id==='paplicar'){const v=['#pw1','#pw2','#pw3','#pw4'].map(x=>Number(gp.querySelector(x).value)||0),sm=v[0]+v[1]+v[2],ps=gp.querySelector('#psuma');
-   if(sm!==100){ps.style.color='var(--mal)';ps.textContent=`Dentro del parcial la suma da ${sm} %. Tiene que dar 100 %.`;return}
-   if(v[3]<0||v[3]>100){ps.style.color='var(--mal)';ps.textContent='El examen final debe valer entre 0 y 100 %.';return}
-   const nw={trab:v[0],asis:v[1],exam:v[2],final:v[3]},igual=Object.keys(nw).every(k=>nw[k]===DIRECCION[k]);
-   const todos=gp.querySelector('#palc .on').dataset.a==='todos';
-   (todos?GRUPOS_PROF.map(x=>x.id):[g]).forEach(id=>{if(igual)delete PONDER[id];else PONDER[id]={...nw}});
-   st.editar=false;pintarCalifG(g);if(todos)alert('Listo: se aplicó a todos tus grupos.');return}
+  if(e.target.closest('.cap'))return;
+  if(e.target.id==='cedit'){st.editar=!st.editar;if(st.editar){st.borrador=copiaEsq(E);st.sel=[g];st.buscaG='';st.guardar=false;st.nombreG=''}return pintarCalifG(g)}
+  const ll=e.target.closest('[data-llenar]');if(ll){e.stopPropagation();const v=prompt('¿Qué calificación pongo a quienes no tienen? (0 a 100)','100');if(v===null||v===''||isNaN(v))return;const M=((MANUAL[g]??={})[ll.dataset.llenar]??={})[ll.dataset.n]??={};A.forEach(([m])=>{if(M[m]==null)M[m]=Math.max(0,Math.min(100,+v))});return pintarCalifG(g)}
+  if(st.editar){
+   const fm=e.target.closest('[data-forma]');if(fm){const f=[DIRECCION,...MIS_FORMAS][+fm.dataset.forma];st.borrador=copiaEsq(f);return pintarCalifG(g)}
+   const kb=e.target.closest('#ek button');if(kb){leerBorrador(gp,st);const nk=+kb.dataset.k;st.borrador.parciales=nk;st.borrador.comps.forEach(c=>{if(!nk&&c.fuente==='examen'){c.fuente='final';if(c.nombre==='Examen')c.nombre='Examen final'}if(nk&&c.fuente==='final'){c.fuente='examen';if(c.nombre==='Examen final')c.nombre='Examen'}});if(!nk)st.borrador.final=0;return pintarCalifG(g)}
+   if(e.target.closest('#emas')){leerBorrador(gp,st);st.borrador.comps.push({id:'c'+Date.now(),nombre:'',pct:0,fuente:'manual'});pintarCalifG(g);const rs=gp.querySelectorAll('#erubros .rn');rs[rs.length-1]?.focus();return}
+   const rx=e.target.closest('.rx');if(rx){leerBorrador(gp,st);st.borrador.comps.splice(+rx.closest('.rubro').dataset.i,1);return pintarCalifG(g)}
+   const gb=e.target.closest('#egrupos button');if(gb){leerBorrador(gp,st);if(gb.dataset.todos)st.sel=st.sel.length===GRUPOS_PROF.length?[g]:GRUPOS_PROF.map(x=>x.id);else{const id=gb.dataset.g;st.sel=st.sel.includes(id)?st.sel.filter(x=>x!==id):[...st.sel,id]}return pintarCalifG(g)}
+   if(e.target.id==='edir'){const ant=esq(g).nombre;delete PONDER[g];HIST[g].push({fecha:ahoraTxt(),texto:`${ant} → La de dirección`});st.editar=false;return pintarCalifG(g)}
+   if(e.target.id==='eaplicar'){leerBorrador(gp,st);const B=st.borrador,err=gp.querySelector('#eerror'),s=B.comps.reduce((a,c)=>a+c.pct,0);
+    if(!B.comps.length)return err.textContent='Agrega al menos un rubro.';
+    if(B.comps.some(c=>!c.nombre.trim()))return err.textContent='Ponle nombre a todos los rubros.';
+    if(s!==100)return err.textContent=`Los rubros suman ${s} %. Tienen que dar 100 %.`;
+    if(B.parciales&&(B.final<0||B.final>100))return err.textContent='El examen final debe valer entre 0 y 100 %.';
+    if(!st.sel.length)return err.textContent='Elige al menos un grupo.';
+    let nombre=firmaEsq(B)===firmaEsq(DIRECCION)?DIRECCION.nombre:([...MIS_FORMAS].find(f=>firmaEsq(f)===firmaEsq(B))?.nombre||'Personalizada');
+    if(st.guardar){const nn=gp.querySelector('#enombre').value.trim();if(!nn)return err.textContent='Escribe un nombre para guardar tu forma.';nombre=nn;MIS_FORMAS.push({...copiaEsq(B),nombre})}
+    B.comps.forEach(c=>c.nombre=c.nombre.trim());
+    for(const id of st.sel){const ant=esq(id);if(firmaEsq(ant)===firmaEsq(B))continue;
+     if(firmaEsq(B)===firmaEsq(DIRECCION))delete PONDER[id];else PONDER[id]={...copiaEsq(B),nombre};
+     HIST[id].push({fecha:ahoraTxt(),texto:`${ant.nombre} → ${nombre}`})}
+    const n=st.sel.length;st.editar=false;pintarCalifG(g);if(n>1)alert(`Listo: se aplicó a ${n} grupos.`);return}
+   return;
+  }
   const vb=e.target.closest('#cv button');if(vb){st.vista=vb.dataset.v;return pintarCalifG(g)}
   const ob=e.target.closest('#cord button');if(ob){st.orden=ob.dataset.o;return pintarCalifG(g)}
   const tr=e.target.closest('[data-al]');if(tr)detalleAlumno(g,tr.dataset.al);
  };
 }
 function detalleAlumno(g,m){
- const w=pond(g),nom=nomAlumno(g,m),num=(v,d=0)=>v==null?'—':(+v).toFixed(d);
- const bloque=p=>{const c=calcParcial(g,m,p.n),cuenta=(v,k)=>v==null?'':!w[k]?' · <span style="color:var(--gris)">no cuenta</span>':` → ${num(v*w[k]/100,1)}`;
-  return `<section class="tarjeta" style="box-shadow:none;border:1px solid var(--linea)"><div class="fila"><h2>Parcial ${p.n}${c.abierto?' <span class="chip" style="vertical-align:3px">en curso</span>':''}</h2><b class="nota" style="color:${colorNota(c.final)}">${c.final==null?'<span style="font-size:13px;color:var(--gris)">pendiente</span>':num(c.final,1)}</b></div>
-   <div class="campo"><small>Trabajos (${w.trab} %)</small>${num(c.trab)} de promedio · entregó ${c.ent} de ${c.total}${c.pend?` · ${c.pend} por calificar`:''}${c.falt?` · <b style="color:var(--mal)">${c.falt} sin entregar (cuentan 0)</b>`:''}${cuenta(c.trab,'trab')}</div>
-   <div class="campo"><small>Asistencia (${w.asis} %)</small>${c.asis==null?'—':num(c.asis)+' %'} · ${c.P} presente${c.P!==1?'s':''}, ${c.R} retardo${c.R!==1?'s':''}, ${c.F} falta${c.F!==1?'s':''} de ${c.ses} clases${cuenta(c.asis,'asis')}</div>
-   <div class="campo"><small>Examen (${w.exam} %)</small>${c.exam==null?`Se aplica el ${p.examen}`:num(c.exam)}${cuenta(c.exam,'exam')}</div></section>`};
- const sem=calcSemestre(g,m);
+ const E=esq(g),nom=nomAlumno(g,m),sem=calcSemestre(g,m),hoy=alMomentoSem(g,m);
+ const bloque=p=>{const c=calcPeriodo(g,m,p.n);
+  const linea=x=>{const cp=x.cp,v=x.v,aporte=v==null||!cp.pct?'':` → ${num(v*cp.pct/100,1)}`;let det='';
+   if(cp.fuente==='trabajos')det=`${num(v)} de promedio · entregó ${c.ent} de ${c.total}${c.pend?` · ${c.pend} por calificar`:''}${c.falt?` · <b style="color:var(--mal)">${c.falt} sin entregar (cuentan 0)</b>`:''}`;
+   else if(cp.fuente==='asistencia')det=`${v==null?'—':num(v)+' %'} · ${c.P} presente${c.P!==1?'s':''}, ${c.R} retardo${c.R!==1?'s':''}, ${c.F} falta${c.F!==1?'s':''} de ${c.ses} clases`;
+   else if(cp.fuente==='examen')det=v==null?`Se aplica el ${p.examen}`:num(v);
+   else if(cp.fuente==='final')det=v==null?`Se aplica el ${EXAMEN_FINAL}`:num(v);
+   else det=v==null?'<span style="color:var(--gris)">Sin capturar</span>':num(v);
+   return `<div class="campo"><small>${esc(cp.nombre)} (${cp.pct} %)</small>${det}${cp.pct?aporte:' · <span style="color:var(--gris)">no cuenta</span>'}</div>`};
+  const titulo=E.parciales?`Parcial ${p.n}`:'Todo el semestre';
+  return `<section class="tarjeta" style="box-shadow:none;border:1px solid var(--linea)"><div class="fila"><h2>${titulo}${c.abierto?' <span class="chip" style="vertical-align:3px">en curso</span>':''}</h2><b class="nota" style="color:${colorNota(c.final)}">${c.final!=null?num(c.final,1):c.alMomento!=null?`<span style="font-size:13px;color:var(--gris)">${num(c.alMomento,1)} al momento</span>`:'<span style="font-size:13px;color:var(--gris)">pendiente</span>'}</b></div>
+   <span style="font-size:12px;color:var(--gris)">Del ${p.del} al ${p.al}</span>${c.partes.map(linea).join('')}</section>`};
  const d=document.createElement('div');d.className='visor-fondo';
  d.innerHTML=`<div class="detalle"><div class="fila"><div><span style="font-size:12px;color:var(--gris)">Grupo ${g} · ${nomMat(grupoDe(g).cl)} · ${m}</span><h2>${nom}</h2></div><button class="btn sec" id="dcerrar" aria-label="Cerrar" style="padding:8px 10px">${ic('cerrar','style="width:18px;height:18px;vertical-align:-4px"')}</button></div>
-  <div class="hero" style="background:linear-gradient(135deg,#1F5F45,#145536);padding:16px"><p>Promedio del semestre (solo parciales cerrados)</p><h2>${num(sem,1)}</h2><p>${sem==null?'Sin parciales cerrados':sem>=CAL.minima?'Va aprobando':'Va reprobando'}</p></div>
-  ${CAL.parciales.map(bloque).join('')}
-  ${w.final?(()=>{const ps=CAL.parciales.map(p=>calcParcial(g,m,p.n).final).filter(x=>x!=null),pp=prom2(ps),ef=EXAMENES[g][m]?.final;return `<section class="tarjeta" style="box-shadow:none;border:1px solid var(--linea)"><div class="fila"><h2>Examen final</h2><b class="nota">${ef??'<span style="font-size:13px;color:var(--gris)">pendiente</span>'}</b></div>
-   <div class="campo"><small>Cómo se calcula el semestre</small>Promedio de parciales ${num(pp,1)} × ${100-w.final} % ${pp==null?'':'= '+num(pp*(100-w.final)/100,1)} · Examen final × ${w.final} % ${ef==null?`(se aplica el ${EXAMEN_FINAL})`:'= '+num(ef*w.final/100,1)}</div></section>`})():''}
+  <div class="hero" style="background:linear-gradient(135deg,#1F5F45,#145536);padding:16px"><p>${sem!=null?'Calificación del semestre':'Lleva al momento'}</p><h2>${num(sem??hoy,1)}</h2><p>${(sem??hoy)==null?'Sin calificaciones todavía':(sem??hoy)>=CAL.minima?'Va aprobando':'Va reprobando'} · ${esc(E.nombre)}</p></div>
+  ${periodos(g).map(bloque).join('')}
+  ${E.parciales&&E.final?(()=>{const ps=periodos(g).map(p=>calcPeriodo(g,m,p.n)).filter(c=>!c.abierto&&c.final!=null).map(c=>c.final),pp=prom2(ps),ef=finalDe(g,m);return `<section class="tarjeta" style="box-shadow:none;border:1px solid var(--linea)"><div class="fila"><h2>Examen final</h2><b class="nota">${ef??'<span style="font-size:13px;color:var(--gris)">pendiente</span>'}</b></div>
+   <div class="campo"><small>Cómo se calcula el semestre</small>Promedio de parciales ${num(pp,1)} × ${100-E.final} %${pp==null?'':' = '+num(pp*(100-E.final)/100,1)} · Examen final × ${E.final} % ${ef==null?`(se aplica el ${EXAMEN_FINAL})`:'= '+num(ef*E.final/100,1)}</div></section>`})():''}
   <button class="btn sec" id="dmsg">${ic('msg','style="width:16px;height:16px;vertical-align:-3px;margin-right:6px"')}Enviarle un mensaje</button></div>`;
  d.onclick=e=>{if(e.target===d||e.target.closest('#dcerrar'))d.remove();if(e.target.closest('#dmsg')){d.remove();estadoProf.chat[g]=m;location.hash=`#prof-g/${g}/mensajes`}};
  document.body.appendChild(d);

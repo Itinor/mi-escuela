@@ -8,7 +8,7 @@
 create extension if not exists pgcrypto with schema extensions;
 
 -- ---------- Limpieza (para poder correrlo otra vez) ----------
-drop table if exists public.pagos, public.calendario, public.historial, public.capturas, public.formas_calificar, public.avisos_leidos, public.avisos,
+drop table if exists public.movimientos, public.pagos, public.calendario, public.historial, public.capturas, public.formas_calificar, public.avisos_leidos, public.avisos,
   public.anotaciones, public.mensajes, public.entregas, public.tareas, public.asistencia,
   public.tutores, public.inscripciones, public.grupos, public.personas cascade;
 delete from auth.identities where user_id in (select id from auth.users where email like '%@escuela.test');
@@ -25,6 +25,7 @@ create table public.personas (
   nombre    text not null,
   grado     text,
   fecha_nacimiento date,
+  estado    text not null default 'activo' check (estado in ('activo','baja','transferido')),
   creado_en timestamptz not null default now()
 );
 
@@ -191,6 +192,20 @@ create table public.historial (
   primary key (alumno_id, ciclo, clave)
 );
 
+-- Historial de cambios de grupo, bajas y transferencias (lo maneja control escolar).
+create table public.movimientos (
+  id              bigint generated always as identity primary key,
+  alumno_id       uuid not null references public.personas(id) on delete cascade,
+  tipo            text not null check (tipo in ('alta','cambio_grupo','baja','transferencia')),
+  de_grupo        text,
+  a_grupo         text,
+  motivo          text,
+  detalle         text,
+  escuela_destino text,
+  hecho_por       uuid references public.personas(id) on delete set null,
+  fecha           timestamptz not null default now()
+);
+
 create index on public.asistencia (alumno_id, fecha);
 create index on public.pagos (alumno_id);
 create index on public.calendario (fecha);
@@ -245,6 +260,8 @@ alter table public.capturas enable row level security;
 alter table public.calendario enable row level security;
 alter table public.pagos enable row level security;
 alter table public.historial enable row level security;
+alter table public.movimientos enable row level security;
+create policy "admin maneja movimientos" on public.movimientos for all to authenticated using (public.es_admin()) with check (public.es_admin());
 
 -- El calendario escolar lo ve toda la comunidad; solo administración lo cambia.
 create policy "ver calendario" on public.calendario for select to authenticated using (grupo_id is null or public.ve_grupo(grupo_id));
@@ -456,6 +473,13 @@ begin
   perform pg_temp.grupo('UA3-FIS', 'Grupo A3', 'universidad', 'Derecho Fiscal II', '21E032', pg_temp.profe_sin_cuenta('C.P. Jorge Medina', 'universidad', 'Derecho Fiscal'), pg_temp.lv(array[6], '08:00', '09:30'), 'Aula 12', uini, ufin);
   perform pg_temp.grupo('UA3-TIT', 'Grupo A3', 'universidad', 'Títulos de crédito', '21E034', pg_temp.profe_sin_cuenta('Lic. Carmen Ruiz', 'universidad', 'Derecho Mercantil'), pg_temp.lv(array[6], '09:30', '11:00'), 'Aula 9', uini, ufin);
 
+  -- Otros salones del mismo grado (para poder cambiar alumnos de grupo).
+  perform pg_temp.grupo('P4A', 'Primaria 4.º A', 'primaria', 'Grupo (titular)', 'P4A', pg_temp.profe_sin_cuenta('Mtra. Elsa Ruiz', 'primaria', 'Titular de 4.º A'), pg_temp.lv(array[1,2,3,4,5], '08:00', '11:00'), 'Salón 11', ini, fin);
+  perform pg_temp.grupo('S2D', 'Secundaria 2.º D', 'secundaria', 'Matemáticas II', 'MAT-2', ts, pg_temp.lv(array[2,4], '09:00', '10:40'), 'Salón 9', ini, fin);
+  perform pg_temp.grupo('S2D-ESP', 'Secundaria 2.º D', 'secundaria', 'Español II', 'ESP-2', (select profesor_id from public.grupos where id = 'S2C-ESP'), pg_temp.lv(array[1,3,5], '08:40', '09:30'), 'Salón 9', ini, fin);
+  perform pg_temp.grupo('B3B', 'Bachillerato 3.º B', 'bachillerato', 'Química III', 'QUI-3', tb, pg_temp.lv(array[1,3], '10:30', '12:10'), 'Laboratorio 2', ini, fin);
+  perform pg_temp.grupo('B3B-MAT', 'Bachillerato 3.º B', 'bachillerato', 'Matemáticas III', 'MAT-3', (select profesor_id from public.grupos where id = 'B3A-MAT'), pg_temp.lv(array[2,4], '07:00', '08:40'), 'Salón 22', ini, fin);
+
   -- Pedro y 7 compañeros ficticios por nivel; están en todas las materias de su grupo.
   nombres := array['Sofía','Mateo','Valentina','Santiago','Regina','Emiliano','Ximena','Diego','Camila','Leonardo','Renata','Sebastián','Mía','Iker','Natalia','Daniel','Romina','Tomás','Abril','Julián'];
   apellidos := array['Aguilar','Barrera','Castillo','Domínguez','Escobar','Flores','Lara','Morales','Núñez','Ortega','Quintero','Rojas','Torres','Valdez','Zamora','Acosta','Bravo','Cortés','Delgado','Ibarra'];
@@ -467,6 +491,16 @@ begin
         (select pg_temp.alumno_sin_cuenta(
           nombres[1 + (abs(hashtext(g.id || i)) % 20)] || ' ' || apellidos[1 + (abs(hashtext(g.id || i || 'a')) % 20)] || ' ' || apellidos[1 + (abs(hashtext(g.id || i || 'b')) % 20)],
           (select nivel from public.grupos where id = g.id), (select grado from public.personas where id = g.pedro), g.id || '-' || lpad(i::text, 2, '0')) as id) nuevo
+        where x.id = g.id or x.id like g.id || '-%';
+    end loop;
+  end loop;
+  -- 6 alumnos en cada salón extra.
+  for g in select * from (values ('P4A', '4.º de primaria'), ('S2D', '2.º de secundaria'), ('B3B', '3.er semestre de bachillerato')) v(id, grado) loop
+    for i in 1..6 loop
+      insert into public.inscripciones select x.id, nuevo.id from public.grupos x,
+        (select pg_temp.alumno_sin_cuenta(
+          nombres[1 + (abs(hashtext(g.id || i || 'n')) % 20)] || ' ' || apellidos[1 + (abs(hashtext(g.id || i || 'c')) % 20)] || ' ' || apellidos[1 + (abs(hashtext(g.id || i || 'd')) % 20)],
+          (select nivel from public.grupos where id = g.id), g.grado, g.id || '-' || lpad(i::text, 2, '0')) as id) nuevo
         where x.id = g.id or x.id like g.id || '-%';
     end loop;
   end loop;
@@ -610,6 +644,11 @@ begin
    (adm, 'Salida temprano', 'El viernes la salida será a las 12:00 por junta de consejo técnico.', null, now() - interval '1 day'),
    (adm, 'Festival navideño', 'El festival de kinder será el 11 de diciembre a las 10:00. Traer el disfraz el día anterior.', 'kinder', now() - interval '3 days'),
    (adm, 'Exámenes del tercer parcial', 'Del 7 al 11 de diciembre. Revisen el calendario de cada materia.', 'bachillerato', now() - interval '2 days');
+
+  -- Un cambio de grupo ya registrado (ejemplo para el historial de control escolar).
+  insert into public.movimientos (alumno_id, tipo, de_grupo, a_grupo, motivo, detalle, hecho_por, fecha)
+   select p.id, 'cambio_grupo', 'Secundaria 2.º C', 'Secundaria 2.º D', 'Conducta', 'Acuerdo con la familia después de varios reportes en clase.', adm, now() - interval '12 days'
+   from public.personas p where p.usuario = 'S2D-01';
 
   -- Fechas que ponen los profesores en sus grupos.
   insert into public.calendario (nivel, fecha, tipo, titulo, descripcion, grupo_id, creado_por) values

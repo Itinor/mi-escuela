@@ -157,6 +157,7 @@ async function cargarPadre(yo) {
   const tut = await L('tutores', {padre_id: yo.id});
   if (!tut.length) throw new Error('No hay alumnos ligados a tu cuenta. Pide a control escolar que te vincule.');
   const hijo = (await L('personas', {id: tut[0].alumno_id}))[0];
+  if (hijo.estado && hijo.estado !== 'activo') throw new Error(`${hijo.nombre.split(' ')[0]} aparece como dado de baja o transferido. Su expediente está disponible en control escolar.`);
   REAL.hijo = hijo; REAL.parentesco = tut[0].parentesco;
   const grupos = await cargarDeAlumno(hijo);
   const [notas] = await Promise.all([L('anotaciones', {alumno_id: hijo.id}, {orden: 'creado_en', desc: true}), cargarComunes(yo, hijo.nivel, hijo.id)]);
@@ -201,6 +202,7 @@ async function cargarReal(yo) {
   // Sin rastro de la demostración: solo quedan los grupos y alumnos reales de esta cuenta.
   for (const o of [ALUMNOS_G, ASIST, PERDONADOS, TAREAS_G, EXAMENES, MSG_GRUPO, MSG_IND, HIST, PONDER, MANUAL]) vaciar(o);
   REAL = {persona: yo, rol: yo.rol, nivel: yo.nivel, rutas: [], fechas: {}, faltas: {}, grupos: [], profes: {}, avisos: [], leidos: new Set(), pagos: [], notas: [], asisInfo: {}};
+  if (yo.rol === 'alumno' && yo.estado && yo.estado !== 'activo') throw new Error('tu inscripción aparece como dada de baja o transferida. Si es un error, comunícate con control escolar.');
   if (yo.rol === 'alumno') await cargarAlumno(yo);
   else if (yo.rol === 'padre') await cargarPadre(yo);
   else if (yo.rol === 'profesor') await cargarProfesor(yo);

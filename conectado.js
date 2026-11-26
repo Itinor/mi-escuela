@@ -40,6 +40,8 @@ const ARCHIVOS = {
   }
 };
 window.ARCHIVOS = ARCHIVOS;
+const LLAVES = {asistencia: ['grupo_id', 'fecha', 'alumno_id'], inscripciones: ['grupo_id', 'alumno_id'], entregas: ['tarea_id', 'alumno_id'], tutores: ['padre_id', 'alumno_id'], avisos_leidos: ['aviso_id', 'persona_id'],
+  capturas: ['grupo_id', 'alumno_id', 'rubro', 'periodo'], historial: ['alumno_id', 'ciclo', 'clave'], formas_calificar: ['grupo_id']};
 function crearDBReal() {
   const filtrar = (q, f) => { for (const [k, v] of Object.entries(f)) { if (Array.isArray(v)) q = q.in(k, v); else if (v && typeof v === 'object' && 'desde' in v) q = q.gte(k, v.desde); else if (v === null) q = q.is(k, null); else q = q.eq(k, v); } return q; };
   const ok = ({data, error}) => { if (error) throw error; return data; };
@@ -47,7 +49,12 @@ function crearDBReal() {
     async sesion() { const c = await SB.iniciar(); const {data} = await c.auth.getSession(); return data.session?.user?.id || null; },
     async entrar(u, p) { const c = await SB.iniciar(); const {data, error} = await c.auth.signInWithPassword({email: correoDe(u), password: p}); if (error) throw error; return data.user.id; },
     async salir() { const c = await SB.iniciar(); await c.auth.signOut(); },
-    async leer(t, f = {}, o = {}) { if (Object.values(f).some(v => Array.isArray(v) && !v.length)) return []; const c = await SB.iniciar(); let q = filtrar(c.from(t).select('*'), f); if (o.orden) q = q.order(o.orden, {ascending: !o.desc}); if (o.limite) q = q.limit(o.limite); return ok(await q); },
+    // Supabase entrega máximo 1000 filas por consulta: se piden por partes hasta tenerlas todas.
+    async leer(t, f = {}, o = {}) { if (Object.values(f).some(v => Array.isArray(v) && !v.length)) return []; const c = await SB.iniciar();
+      const llave = LLAVES[t] || ['id'];   // orden fijo para que las partes no se repitan ni se salten filas
+      const consulta = () => { let q = filtrar(c.from(t).select('*'), f); if (o.orden) q = q.order(o.orden, {ascending: !o.desc}); for (const k of llave) if (k !== o.orden) q = q.order(k); return q; };
+      if (o.limite) return ok(await consulta().limit(o.limite));
+      const todo = []; for (let i = 0; ; i += 1000) { const parte = ok(await consulta().range(i, i + 999)); todo.push(...parte); if (parte.length < 1000) return todo; } },
     async insertar(t, filas) { const c = await SB.iniciar(); return ok(await c.from(t).insert(filas).select()); },
     async upsert(t, filas, conflicto) { const c = await SB.iniciar(); return ok(await c.from(t).upsert(filas, {onConflict: conflicto}).select()); },
     async actualizar(t, cambios, f) { const c = await SB.iniciar(); return ok(await filtrar(c.from(t).update(cambios), f).select()); },
@@ -133,13 +140,13 @@ function navDe(yo) {
   if (yo.rol === 'alumno') return [['c/inicio', 'Inicio', 'inicio'], ['c/tareas', yo.nivel === 'primaria' ? 'Mis tareas' : 'Tareas', 'act'], ...(yo.nivel === 'primaria' ? [] : [['c/mensajes', 'Mensajes', 'msg']])];
   if (yo.rol === 'padre') return [['c/hijo', 'Resumen', 'inicio'], ['c/hijo/mensajes', 'Mensajes', 'msg']];
   if (yo.rol === 'profesor') return [['c/grupos', 'Mis grupos', 'perfil'], ...(C.cache.misGrupos || []).map(g => [`c/g/${g.id}/lista`, g.nombre + (g.materia.startsWith('Grupo') ? '' : ' · ' + g.materia), 'lista'])];
-  return [['c/admin', 'Resumen', 'tray'], ['c/admin/alumnos', 'Alumnos', 'perfil'], ['c/admin/calendario', 'Calendario escolar', 'cal'], ['c/admin/pagos', 'Pagos', 'pagos'], ['c/admin/avisos', 'Avisos', 'msg'], ['c/admin/profesores', 'Profesores', 'lista']];
+  return [['c/admin', 'Resumen', 'tray'], ['c/admin/alumnos', 'Alumnos', 'perfil'], ['c/admin/grupos', 'Grupos', 'lista'], ['c/admin/calendario', 'Calendario escolar', 'cal'], ['c/admin/pagos', 'Pagos', 'pagos'], ['c/admin/avisos', 'Avisos', 'msg'], ['c/admin/profesores', 'Profesores', 'lista']];
 }
 function marcoC(ruta, titulo, html) {
   const yo = C.yo, nav = navDe(yo), clase = {profesor: 'prof', padre: 'padre', admin: 'admin', alumno: ''}[yo.rol];
   const activo = k => k === ruta || (ruta.startsWith('c/g/') && k.startsWith(ruta.split('/').slice(0, 3).join('/') + '/')) || (k === 'c/hijo' && ruta === 'c/hijo');
   const rolTxt = {alumno: `${NIVELES[yo.nivel] || ''} · ${yo.grado || ''}`, padre: yo.grado || 'Familia', profesor: `Profesor · ${NIVELES[yo.nivel] || ''}`, admin: 'Administración'}[yo.rol];
-  const inf = yo.rol === 'admin' ? [nav[0], nav[2], nav[3]] : nav.slice(0, 3);
+  const inf = yo.rol === 'admin' ? [nav[0], nav[2], nav[4]] : nav.slice(0, 3);
   document.getElementById('raiz').innerHTML = `
   <div class="app ${clase}">
    <aside class="lateral"><div class="logo"><b>me</b><span>miescuela.com</span></div>
@@ -169,7 +176,7 @@ async function pintarConectado(r) {
     if (yo.rol === 'alumno') { if (r === 'c/tareas') return await vAlumnoTareas(); if (r === 'c/mensajes' && yo.nivel !== 'primaria') return await vMensajes('c/mensajes'); return await vAlumnoInicio(); }
     if (yo.rol === 'padre') { if (r === 'c/hijo/mensajes') return await vMensajes('c/hijo/mensajes'); return await vPadre(); }
     if (yo.rol === 'profesor') { if (p[1] === 'g' && C.cache.misGrupos.some(g => g.id === p[2])) return await vGrupo(p[2], p[3] || 'lista'); return await vProfGrupos(); }
-    if (yo.rol === 'admin') { if (r === 'c/admin/alumnos') return await vAdminAlumnos(); if (r === 'c/admin/profesores') return await vAdminProfesores(); if (r === 'c/admin/avisos') return await vAdminAvisos(); if (r === 'c/admin/calendario') return await vAdminCalendario(); if (r === 'c/admin/pagos') return await vAdminPagos(); return await vAdmin(); }
+    if (yo.rol === 'admin') { if (r === 'c/admin/alumnos') return await vAdminAlumnos(); if (r === 'c/admin/profesores') return await vAdminProfesores(); if (r === 'c/admin/avisos') return await vAdminAvisos(); if (r === 'c/admin/calendario') return await vAdminCalendario(); if (r === 'c/admin/grupos') return await vAdminGrupos(); if (r === 'c/admin/pagos') return await vAdminPagos(); return await vAdmin(); }
   } catch (e) { marcoC(r, 'Error', fallo(e)); }
 }
 window.pintarConectado = pintarConectado;
@@ -461,7 +468,7 @@ async function vAdminAlumnos() {
      <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><input id="aq" placeholder="Buscar por nombre o matrícula" value="${esc(filtroAdmin.q)}" style="flex:1;min-width:200px"><button class="btn" id="aalta" style="padding:10px 14px;font-size:13px">+ Dar de alta</button></div>
       <div class="tabs" id="anv">${[['', 'Todos'], ...Object.entries(NIVELES)].map(([k, t]) => `<button data-n="${k}" class="suave ${filtroAdmin.nivel === k ? 'activo' : ''}">${t} (${k ? alumnos.filter(a => a.nivel === k).length : alumnos.length})</button>`).join('')}</div>
       <form id="afalta" class="oculto" style="display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--linea);padding-top:12px"><div class="form"><label>Nombre completo<input id="an" required></label><label>Nivel<select id="anl">${Object.entries(NIVELES).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></label><label>Grado<input id="ag" placeholder="Ej. 2.º de secundaria"></label><label>Grupo<select id="agr"></select></label><label>Matrícula<input id="am" placeholder="Opcional"></label></div><button class="btn" type="submit">Guardar alumno</button><span style="font-size:12px;color:var(--gris)">La cuenta para entrar (correo y contraseña) se crea aparte; aquí solo se da de alta el expediente.</span></form>
-      <div style="overflow-x:auto"><table><thead><tr><th>Alumno</th><th>Nivel</th><th class="ocultar-movil">Grupo</th><th class="num">Asistencia</th><th class="num ocultar-movil">Cuenta</th></tr></thead><tbody>${ver.map(a => `<tr><td>${esc(a.nombre)}<br><span style="font-size:12px;color:var(--gris)">${esc(a.usuario || '')} · ${esc(a.grado || '')}</span></td><td>${NIVELES[a.nivel] || ''}</td><td class="ocultar-movil">${d.ins.filter(i => i.alumno_id === a.id).map(i => esc(d.grupos.find(g => g.id === i.grupo_id)?.nombre || i.grupo_id)).join(', ')}</td><td class="num">${asis(a.id) ?? '—'}${asis(a.id) != null ? ' %' : ''}</td><td class="num ocultar-movil">${a.auth_id ? '<span class="chip ok">Sí</span>' : '<span class="chip">No</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Nadie coincide.</td></tr>'}</tbody></table></div></section>`;
+      <div style="overflow-x:auto"><table><thead><tr><th>Alumno</th><th>Nivel</th><th class="ocultar-movil">Grupo</th><th class="num">Asistencia</th><th class="num ocultar-movil">Cuenta</th></tr></thead><tbody>${ver.map(a => `<tr><td>${esc(a.nombre)}${a.estado && a.estado !== 'activo' ? ` <span class="chip ${a.estado === 'baja' ? 'mal' : 'aviso'}">${a.estado === 'baja' ? 'Baja' : 'Transferido'}</span>` : ''}<br><span style="font-size:12px;color:var(--gris)">${esc(a.usuario || '')} · ${esc(a.grado || '')}</span></td><td>${NIVELES[a.nivel] || ''}</td><td class="ocultar-movil">${d.ins.filter(i => i.alumno_id === a.id).map(i => esc(d.grupos.find(g => g.id === i.grupo_id)?.nombre || i.grupo_id)).join(', ')}</td><td class="num">${asis(a.id) ?? '—'}${asis(a.id) != null ? ' %' : ''}</td><td class="num ocultar-movil">${a.auth_id ? '<span class="chip ok">Sí</span>' : '<span class="chip">No</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Nadie coincide.</td></tr>'}</tbody></table></div></section>`;
     const sel = () => { const n = main().querySelector('#anl').value; main().querySelector('#agr').innerHTML = '<option value="">Sin grupo</option>' + d.grupos.filter(g => g.nivel === n).map(g => `<option value="${g.id}">${esc(g.nombre)} · ${esc(g.materia)}</option>`).join(''); };
     sel(); main().querySelector('#anl').onchange = sel;
     const q2 = main().querySelector('#aq'); q2.oninput = () => { filtroAdmin.q = q2.value; const p = q2.selectionStart; pinta(); const q3 = main().querySelector('#aq'); q3.focus(); q3.setSelectionRange(p, p); };
@@ -563,4 +570,275 @@ async function vAdminPagos() {
     if (e.target.id === 'precall') { const con = filas.filter(x => destino(x.a).ids.length); if (!confirm(`¿Enviar el recordatorio a ${con.length} familias o alumnos?`)) return; e.target.disabled = true;
       try { for (const x of con) await recordar(x.a.id); alert(`Listo: se enviaron ${con.length} recordatorios.`); vAdminPagos(); } catch (x) { alert('No se pudo enviar: ' + x.message); e.target.disabled = false; } }
   };
+}
+
+// =====================================================================
+// Administración: grupos (armarlos, asignar profesores, mover alumnos, bajas y transferencias) e importación desde Excel
+// =====================================================================
+const normal = t => String(t ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+const slug = t => normal(t).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').toUpperCase();
+const nivelDe = t => { const n = normal(t); return n.startsWith('kin') || n.startsWith('pree') ? 'kinder' : n.startsWith('prim') ? 'primaria' : n.startsWith('sec') ? 'secundaria' : n.startsWith('bach') || n.startsWith('prepa') ? 'bachillerato' : n.startsWith('uni') || n.startsWith('lic') ? 'universidad' : null; };
+const DIAS_ABR = {lun: 1, mar: 2, mie: 3, jue: 4, vie: 5, sab: 6, dom: 7};
+function diasDe(t) {
+  const n = normal(t); if (!n) return [];
+  const r = n.match(/^(lun|mar|mie|jue|vie|sab|dom)\w*\.? a (lun|mar|mie|jue|vie|sab|dom)/);
+  if (r) { const o = []; for (let d = DIAS_ABR[r[1]]; d <= DIAS_ABR[r[2]]; d++) o.push(d); return o; }
+  return [...new Set((n.match(/lun|mar|mie|jue|vie|sab|dom/g) || []).map(x => DIAS_ABR[x]))].sort();
+}
+const horaDe = v => { if (typeof v === 'number' && v < 1) { const m = Math.round(v * 1440); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; }
+  const r = String(v ?? '').match(/(\d{1,2})[:.](\d{2})/); return r ? `${r[1].padStart(2, '0')}:${r[2]}` : null; };
+const fechaDe = v => { if (typeof v === 'number' && v > 1000) return iso(new Date(Date.UTC(1899, 11, 30) + v * 864e5 + 43200000));
+  const t = String(v ?? '').trim(); let r = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/); if (r) return `${r[3]}-${r[2].padStart(2, '0')}-${r[1].padStart(2, '0')}`;
+  r = t.match(/^(\d{4})-(\d{2})-(\d{2})/); return r ? r[0] : null; };
+const DIA_TXT = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const horarioCortoC = h => { const por = {}; (h || []).forEach(x => (por[`${x.inicio}–${x.fin}`] ??= []).push(+x.dia));
+  return Object.entries(por).map(([t, ds]) => { ds.sort(); const seg = ds.length > 2 && ds.every((d, k) => !k || d === ds[k - 1] + 1); return `${seg ? DIA_TXT[ds[0]] + ' a ' + DIA_TXT[ds.at(-1)] : ds.map(d => DIA_TXT[d]).join(', ')} ${t}`; }).join(' · ') || 'Sin horario'; };
+const nomMateria = g => /^Grupo/.test(g.materia) ? 'Titular' : g.materia;
+
+// ---------- Lector de Excel (.xlsx) y CSV, sin librerías ----------
+async function leerHojas(archivo) {
+  const buf = await archivo.arrayBuffer();
+  if (/\.csv$/i.test(archivo.name) || archivo.type === 'text/csv') return {Hoja1: leerCSV(new TextDecoder().decode(buf))};
+  const u8 = new Uint8Array(buf), dv = new DataView(buf), td = new TextDecoder();
+  let e = u8.length - 22; while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  if (e < 0) throw new Error('El archivo no es un Excel (.xlsx) válido.');
+  const n = dv.getUint16(e + 10, true), arch = {}; let p = dv.getUint32(e + 16, true);
+  for (let i = 0; i < n; i++) { const nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+    arch[td.decode(u8.subarray(p + 46, p + 46 + nl))] = {metodo: dv.getUint16(p + 10, true), tam: dv.getUint32(p + 20, true), off: dv.getUint32(p + 42, true)}; p += 46 + nl + xl + cl; }
+  const leer = async nombre => { const f = arch[nombre]; if (!f) return null; const ini = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), datos = u8.subarray(ini, ini + f.tam);
+    if (f.metodo === 0) return td.decode(datos); return new Response(new Blob([datos]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text(); };
+  const xml = t => new DOMParser().parseFromString(t, 'application/xml'), etiquetas = (n2, t) => [...n2.getElementsByTagName(t)];
+  const ss = [], sst = await leer('xl/sharedStrings.xml');
+  if (sst) for (const si of etiquetas(xml(sst), 'si')) ss.push(etiquetas(si, 't').map(t => t.textContent).join(''));
+  const rels = {}; for (const r of etiquetas(xml(await leer('xl/_rels/workbook.xml.rels')), 'Relationship')) rels[r.getAttribute('Id')] = r.getAttribute('Target');
+  const col = ref => { let c = 0; for (const ch of ref.replace(/\d+/g, '')) c = c * 26 + ch.charCodeAt(0) - 64; return c - 1; };
+  const hojas = {};
+  for (const sh of etiquetas(xml(await leer('xl/workbook.xml')), 'sheet')) {
+    let t = rels[sh.getAttribute('r:id')] || ''; t = t.startsWith('/') ? t.slice(1) : 'xl/' + t;
+    const doc = await leer(t); if (!doc) continue;
+    hojas[sh.getAttribute('name')] = etiquetas(xml(doc), 'row').map(row => { const fila = [];
+      for (const c of etiquetas(row, 'c')) { const tipo = c.getAttribute('t'), v = c.getElementsByTagName('v')[0]?.textContent;
+        fila[col(c.getAttribute('r'))] = tipo === 's' ? ss[+v] : tipo === 'inlineStr' ? etiquetas(c, 't').map(x => x.textContent).join('') : tipo === 'str' ? v : v == null ? '' : isNaN(+v) ? v : +v; }
+      return fila; });
+  }
+  return hojas;
+}
+function leerCSV(t) {
+  t = t.replace(/^﻿/, ''); const sep = (t.split('\n')[0].match(/;/g) || []).length > (t.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+  const filas = []; let fila = [], campo = '', q = false;
+  for (let i = 0; i < t.length; i++) { const c = t[i];
+    if (q) { if (c === '"' && t[i + 1] === '"') { campo += '"'; i++; } else if (c === '"') q = false; else campo += c; }
+    else if (c === '"') q = true; else if (c === sep) { fila.push(campo); campo = ''; } else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; fila.push(campo); filas.push(fila); fila = []; campo = ''; } else campo += c; }
+  if (campo || fila.length) { fila.push(campo); filas.push(fila); }
+  return filas;
+}
+// Convierte una hoja en objetos con las columnas conocidas (no importa el orden ni los acentos).
+const COLUMNAS = {nivel: 'nivel', grupo: 'grupo', salon: 'grupo', materia: 'materia', asignatura: 'materia', profesor: 'profesor', maestro: 'profesor', docente: 'profesor', dias: 'dias', inicio: 'inicio', 'hora inicio': 'inicio', fin: 'fin', 'hora fin': 'fin', aula: 'aula',
+  nombre: 'nombre', alumno: 'nombre', 'nombre completo': 'nombre', grado: 'grado', matricula: 'matricula', 'fecha de nacimiento': 'nacimiento', nacimiento: 'nacimiento', tutor: 'tutor', 'mama o papa': 'tutor', parentesco: 'parentesco'};
+function aObjetos(filas) {
+  const cab = (filas[0] || []).map(c => COLUMNAS[normal(c)] || null);
+  return filas.slice(1).map((f, i) => { const o = {_fila: i + 2}; cab.forEach((k, j) => { if (k) o[k] = typeof f[j] === 'string' ? f[j].trim() : f[j]; }); return o; })
+    .filter(o => Object.keys(o).some(k => k !== '_fila' && o[k] !== '' && o[k] != null));
+}
+
+// ---------- Datos y utilidades de grupos ----------
+async function datosGrupos() {
+  const [grupos, ins, personas, tutores, movs] = await Promise.all([db().leer('grupos', {}, {orden: 'id'}), db().leer('inscripciones'), db().leer('personas', {}, {orden: 'nombre'}), db().leer('tutores'), db().leer('movimientos', {}, {orden: 'fecha', desc: true})]);
+  const P = porId(personas), salones = {};
+  for (const g of grupos) { const k = `${g.nivel}|${g.nombre}`; (salones[k] ??= {k, nivel: g.nivel, nombre: g.nombre, grupos: [], alumnos: new Set()}).grupos.push(g); }
+  for (const i of ins) { const g = grupos.find(x => x.id === i.grupo_id); if (g && P[i.alumno_id]?.rol === 'alumno') salones[`${g.nivel}|${g.nombre}`].alumnos.add(i.alumno_id); }
+  return {grupos, ins, personas, P, tutores, movs, salones};
+}
+const salonDe = (d, alumnoId, nivel) => Object.values(d.salones).find(s => (!nivel || s.nivel === nivel) && s.alumnos.has(alumnoId));
+async function inscribir(alumnoId, salon, yaInscrito = []) {
+  const filas = salon.grupos.filter(g => !yaInscrito.some(i => i.grupo_id === g.id && i.alumno_id === alumnoId)).map(g => ({grupo_id: g.id, alumno_id: alumnoId}));
+  if (filas.length) await db().insertar('inscripciones', filas);
+}
+const sacar = (alumnoId, salon) => db().borrar('inscripciones', {alumno_id: alumnoId, grupo_id: salon.grupos.map(g => g.id)});
+// Avisa a los papás (o al alumno si ya es mayor de edad) con un mensaje de control escolar.
+async function avisarFamilia(d, a, texto) {
+  const e = edadDe(a.fecha_nacimiento), para = e != null && e >= 18 ? [a.id] : d.tutores.filter(t => t.alumno_id === a.id).map(t => t.padre_id);
+  if (para.length) await db().insertar('mensajes', para.map(p => ({de: C.yo.id, para: p, texto})));
+  return para.length;
+}
+
+let estGrupos = {nivel: 'secundaria', salon: null, accion: null, plan: null};
+const MOTIVOS = ['Conducta', 'Rendimiento académico', 'A petición de la familia', 'Reacomodo de grupos', 'Otro'];
+async function vAdminGrupos() {
+  marcoC('c/admin/grupos', 'Grupos', cargando());
+  const d = await datosGrupos(), profes = d.personas.filter(p => p.rol === 'profesor'), st = estGrupos;
+  const salones = Object.values(d.salones).filter(s => s.nivel === st.nivel).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const S = st.salon && d.salones[st.salon];
+  const optProf = (nivel, sel) => `<option value="">Sin asignar</option>${profes.filter(p => !nivel || p.nivel === nivel || p.id === sel).map(p => `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.nombre)}${p.auth_id ? '' : ' (sin cuenta)'}</option>`).join('')}`;
+  const movHTML = m => { const a = d.P[m.alumno_id]; return `<div class="it" style="align-items:flex-start"><span class="chip ${m.tipo === 'baja' ? 'mal' : m.tipo === 'transferencia' || m.tipo === 'cambio_grupo' ? 'aviso' : 'ok'}" style="white-space:nowrap">${{alta: 'Alta', cambio_grupo: 'Cambio de grupo', baja: 'Baja', transferencia: 'Transferencia'}[m.tipo]}</span><div class="t"><b>${esc(a?.nombre || 'Alumno')}</b><span>${m.de_grupo ? esc(m.de_grupo) : ''}${m.de_grupo && (m.a_grupo || m.escuela_destino) ? ' → ' : ''}${esc(m.a_grupo || m.escuela_destino || '')}${m.motivo ? ' · ' + esc(m.motivo) : ''}${m.detalle ? ' · ' + esc(m.detalle) : ''} · ${hora(m.fecha)}</span></div></div>`; };
+
+  let cuerpo;
+  if (S) {
+    const alumnos = [...S.alumnos].map(id => d.P[id]).filter(Boolean).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    const otros = Object.values(d.salones).filter(x => x.nivel === S.nivel && x.k !== S.k);
+    const sinSalon = d.personas.filter(p => p.rol === 'alumno' && p.nivel === S.nivel && (p.estado || 'activo') === 'activo' && !salonDe(d, p.id, S.nivel));
+    const panel = a => { const ac = st.accion; if (!ac || ac.id !== a.id) return '';
+      if (ac.tipo === 'mover') return `<form class="panel-acc" data-mover="${a.id}" style="display:flex;flex-direction:column;gap:10px;width:100%;background:var(--fondo);border-radius:14px;padding:12px">
+        <div class="form"><label>Pasar a<select name="destino" required>${otros.map(o => `<option value="${esc(o.k)}">${esc(o.nombre)} (${o.alumnos.size} alumnos)</option>`).join('') || '<option value="">No hay otro grupo de este nivel</option>'}</select></label><label>Motivo<select name="motivo">${MOTIVOS.map(m => `<option>${m}</option>`).join('')}</select></label></div>
+        <label>Detalle (queda en el historial)<input name="detalle" placeholder="Ej. Acuerdo con la familia después de varios reportes"></label>
+        <label style="flex-direction:row;align-items:center;gap:8px;color:var(--tinta)"><input type="checkbox" name="avisar" checked style="width:auto"> Avisar a sus papás por mensaje${edadDe(a.fecha_nacimiento) >= 18 ? ' (es mayor de edad: se le avisa a él)' : ''}</label>
+        <div style="display:flex;gap:8px"><button class="btn" type="submit" ${otros.length ? '' : 'disabled'}>Cambiar de grupo</button><button class="btn sec" type="button" data-cancelar>Cancelar</button></div></form>`;
+      return `<form class="panel-acc" data-baja="${a.id}" style="display:flex;flex-direction:column;gap:10px;width:100%;background:var(--malf);border-radius:14px;padding:12px">
+        <div class="form"><label>Tipo<select name="tipo"><option value="transferencia">Transferencia a otra escuela</option><option value="baja">Baja</option></select></label><label>Escuela a la que se va (si se sabe)<input name="escuela" placeholder="Ej. Secundaria Técnica 12"></label></div>
+        <div class="form"><label>Motivo<select name="motivo">${['Conducta', 'Cambio de domicilio', 'A petición de la familia', 'Situación económica', 'Otro'].map(m => `<option>${m}</option>`).join('')}</select></label><label>Detalle<input name="detalle" required placeholder="Ej. Se acordó con la familia la transferencia"></label></div>
+        <span style="font-size:12px;color:var(--gris)">Se le quita de sus grupos y su expediente queda guardado con el historial. Su asistencia y calificaciones no se borran.</span>
+        <label style="flex-direction:row;align-items:center;gap:8px;color:var(--tinta)"><input type="checkbox" name="avisar" checked style="width:auto"> Avisar a sus papás por mensaje</label>
+        <div style="display:flex;gap:8px"><button class="btn" type="submit" style="background:var(--mal)">Registrar</button><button class="btn sec" type="button" data-cancelar>Cancelar</button></div></form>`; };
+    cuerpo = `<section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><div><h2>${esc(S.nombre)}</h2><span style="font-size:13px;color:var(--gris)">${NIVELES[S.nivel]} · ${S.alumnos.size} alumnos · ${S.grupos.length} materia${S.grupos.length !== 1 ? 's' : ''}</span></div><button class="btn sec" data-salon="" style="padding:8px 12px;font-size:13px">← Todos los grupos</button></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Materia</th><th>Profesor</th><th class="ocultar-movil">Horario</th><th class="ocultar-movil">Aula</th></tr></thead><tbody>${S.grupos.map(g => `<tr><td>${esc(nomMateria(g))}</td><td><select data-prof="${g.id}" style="padding:8px 10px;min-width:180px">${optProf(S.nivel, g.profesor_id)}</select></td><td class="ocultar-movil">${horarioCortoC(g.horario)}</td><td class="ocultar-movil">${esc(g.aula || '')}</td></tr>`).join('')}</tbody></table></div>
+      <span style="font-size:12px;color:var(--gris)">Al cambiar el profesor, el nuevo ve el grupo con su lista, tareas y calificaciones desde ese momento.</span></section>
+     <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><h2>Alumnos</h2>${sinSalon.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap"><select id="gagr" style="padding:8px 10px;min-width:200px">${sinSalon.map(p => `<option value="${p.id}">${esc(p.nombre)}</option>`).join('')}</select><button class="btn" id="gagrb" style="padding:8px 12px;font-size:13px">Agregar al grupo</button></div>` : ''}</div>
+      <div class="lista">${alumnos.map(a => { const e = edadDe(a.fecha_nacimiento); return `<div class="it" style="flex-wrap:wrap"><span class="avatar" style="width:36px;height:36px;font-size:12px;color:#fff;background:#8C7FA0">${iniciales(a.nombre)}</span><div class="t" style="min-width:180px"><b>${esc(a.nombre)}</b><span>${esc(a.usuario || '')}${e != null ? ' · ' + e + ' años' : ''}${d.movs.some(m => m.alumno_id === a.id) ? ' · ya tuvo cambios (ver historial)' : ''}</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn sec" data-acc="mover" data-al="${a.id}" style="padding:8px 12px;font-size:13px">Cambiar de grupo</button><button class="btn sec" data-acc="baja" data-al="${a.id}" style="padding:8px 12px;font-size:13px;color:var(--mal)">Baja o transferencia</button></div>${panel(a)}</div>`; }).join('') || '<div class="vacio">Este grupo no tiene alumnos.</div>'}</div></section>`;
+  } else {
+    cuerpo = `<div class="rejilla">${salones.map(x => `<a class="tarjeta" href="#" data-salon="${esc(x.k)}" style="color:inherit"><div class="fila"><h2>${esc(x.nombre)}</h2><span class="chip">${x.alumnos.size} alumnos</span></div>
+      <div class="lista">${x.grupos.map(g => `<div class="it" style="padding:6px 0"><div class="t"><b style="font-size:14px">${esc(nomMateria(g))}</b><span>${esc(d.P[g.profesor_id]?.nombre || 'Sin profesor')} · ${horarioCortoC(g.horario)}</span></div></div>`).join('')}</div></a>`).join('') || `<div class="vacio">${ic('perfil')}No hay grupos de ${NIVELES[st.nivel].toLowerCase()}. Créalos aquí o impórtalos desde Excel.</div>`}</div>`;
+  }
+  const movs = d.movs.filter(m => d.P[m.alumno_id]?.nivel === st.nivel).slice(0, 12);
+  main().innerHTML = `
+   <section class="tarjeta"><div class="fila" style="flex-wrap:wrap;gap:8px"><div><h2>Armar grupos</h2><span style="font-size:13px;color:var(--gris)">Qué profesor da cada materia y qué alumnos hay en cada grupo. A mano o desde un Excel.</span></div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec" id="gnueva" style="padding:9px 14px;font-size:13px">+ Grupo o materia</button><label class="btn" style="padding:9px 14px;font-size:13px;cursor:pointer;flex-direction:row;color:#fff">${ic('subir', 'style="width:16px;height:16px"')} Importar desde Excel<input type="file" id="gimp" accept=".xlsx,.csv" hidden></label><a class="btn sec" href="plantilla_grupos.xlsx" download style="padding:9px 14px;font-size:13px">${ic('bajar', 'style="width:16px;height:16px;vertical-align:-3px"')} Plantilla</a></div></div>
+    <div class="tabs" id="gnv">${Object.entries(NIVELES).map(([k, t]) => `<button data-n="${k}" class="suave ${st.nivel === k ? 'activo' : ''}">${t} (${Object.values(d.salones).filter(x => x.nivel === k).length})</button>`).join('')}</div>
+    <form id="gnf" class="oculto" style="display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--linea);padding-top:12px">
+     <div class="form"><label>Grupo<input name="grupo" list="gsal" required placeholder="Ej. Secundaria 2.º E" value="${S ? esc(S.nombre) : ''}"><datalist id="gsal">${salones.map(x => `<option value="${esc(x.nombre)}">`).join('')}</datalist></label><label>Materia<input name="materia" required placeholder="${st.nivel === 'kinder' || st.nivel === 'primaria' ? 'Titular, Inglés…' : 'Ej. Matemáticas II'}"></label>
+      <label>Profesor<select name="prof">${optProf(st.nivel)}</select></label><label>Aula<input name="aula" placeholder="Ej. Salón 9"></label></div>
+     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span style="font-size:13px;font-weight:600;color:var(--gris)">Días</span>${[1, 2, 3, 4, 5, 6].map(x => `<label style="flex-direction:row;align-items:center;gap:4px;color:var(--tinta)"><input type="checkbox" name="dia" value="${x}" ${x < 6 && st.nivel !== 'universidad' ? 'checked' : ''} style="width:auto">${DIA_TXT[x]}</label>`).join('')}</div>
+     <div class="form"><label>Hora de inicio<input type="time" name="ini" value="08:00" required></label><label>Hora de fin<input type="time" name="fin" value="09:00" required></label></div>
+     <button class="btn" type="submit">Guardar materia</button></form>
+    <div id="gplan">${st.plan ? planHTML(st.plan) : ''}</div></section>
+   ${cuerpo}
+   <section class="tarjeta"><h2>Historial de cambios · ${NIVELES[st.nivel]}</h2><div class="lista">${movs.map(movHTML).join('') || '<div class="vacio">Sin cambios de grupo, bajas ni transferencias.</div>'}</div></section>`;
+
+  const recargar = () => vAdminGrupos();
+  main().onclick = async e => {
+    const nv = e.target.closest('#gnv button'); if (nv) { Object.assign(st, {nivel: nv.dataset.n, salon: null, accion: null}); return recargar(); }
+    const sl = e.target.closest('[data-salon]'); if (sl) { e.preventDefault(); Object.assign(st, {salon: sl.dataset.salon || null, accion: null}); return recargar(); }
+    if (e.target.id === 'gnueva') return main().querySelector('#gnf').classList.toggle('oculto');
+    const ac = e.target.closest('[data-acc]'); if (ac) { st.accion = st.accion?.id === ac.dataset.al && st.accion.tipo === ac.dataset.acc ? null : {id: ac.dataset.al, tipo: ac.dataset.acc}; const y = scrollY; await recargar(); return scrollTo(0, y); }
+    if (e.target.closest('[data-cancelar]')) { st.accion = null; const y = scrollY; await recargar(); return scrollTo(0, y); }
+    if (e.target.id === 'gagrb') { const id = main().querySelector('#gagr').value; e.target.disabled = true;
+      try { await inscribir(id, S, d.ins); await db().insertar('movimientos', [{alumno_id: id, tipo: 'alta', a_grupo: S.nombre, motivo: 'Asignación de grupo', hecho_por: C.yo.id}]); recargar(); } catch (x) { alert('No se pudo agregar: ' + x.message); e.target.disabled = false; } }
+    if (e.target.id === 'gimpok') return importar(st.plan, e.target);
+    if (e.target.id === 'gimpno') { st.plan = null; return recargar(); }
+  };
+  main().onchange = async e => {
+    const pr = e.target.closest('[data-prof]'); if (pr) { try { await db().actualizar('grupos', {profesor_id: pr.value || null}, {id: pr.dataset.prof}); pr.style.borderColor = 'var(--ok)'; } catch (x) { alert('No se pudo cambiar: ' + x.message); } }
+    if (e.target.id === 'gimp' && e.target.files[0]) { const f = e.target.files[0]; main().querySelector('#gplan').innerHTML = `<div class="vacio">${ic('reloj')}Leyendo ${esc(f.name)}…</div>`;
+      try { st.plan = analizarImport(await leerHojas(f), d); st.plan.archivo = f.name; } catch (x) { st.plan = null; main().querySelector('#gplan').innerHTML = `<div class="vacio" style="color:var(--mal)">${ic('cerrar')}No se pudo leer el archivo: ${esc(x.message)}</div>`; return; }
+      main().querySelector('#gplan').innerHTML = planHTML(st.plan); main().querySelector('#gplan').scrollIntoView({block: 'start', behavior: 'smooth'}); }
+  };
+  main().onsubmit = async e => {
+    e.preventDefault(); const f = e.target, v = n => f.elements[n]?.value?.trim(), btn = f.querySelector('button[type=submit]'); btn.disabled = true;
+    try {
+      if (f.id === 'gnf') {
+        const dias = [...f.querySelectorAll('[name=dia]:checked')].map(x => +x.value); if (!dias.length) throw new Error('Elige al menos un día.');
+        const materia = normal(v('materia')) === 'titular' ? 'Grupo (titular)' : v('materia'), existe = d.grupos.find(g => g.nivel === st.nivel && normal(g.nombre) === normal(v('grupo')) && normal(g.materia) === normal(materia));
+        const fila = {nombre: v('grupo'), nivel: st.nivel, materia, profesor_id: v('prof') || null, horario: dias.map(x => ({dia: x, inicio: v('ini'), fin: v('fin')})), aula: v('aula') || null};
+        if (existe) await db().actualizar('grupos', fila, {id: existe.id}); else await db().insertar('grupos', [{id: idNuevo(d, fila.nombre, materia), ...fila}]);
+        st.salon = `${st.nivel}|${fila.nombre}`; return recargar();
+      }
+      const a = d.P[f.dataset.mover || f.dataset.baja];
+      if (f.dataset.mover) {
+        const dest = d.salones[v('destino')]; if (!dest) throw new Error('Elige el grupo al que pasa.');
+        await sacar(a.id, S); await inscribir(a.id, dest);
+        await db().insertar('movimientos', [{alumno_id: a.id, tipo: 'cambio_grupo', de_grupo: S.nombre, a_grupo: dest.nombre, motivo: v('motivo'), detalle: v('detalle') || null, hecho_por: C.yo.id}]);
+        if (f.elements.avisar.checked) await avisarFamilia(d, a, `Le informamos que ${a.nombre.split(' ')[0]} cambia del grupo ${S.nombre} al ${dest.nombre} a partir de hoy. Motivo: ${v('motivo').toLowerCase()}${v('detalle') ? ' (' + v('detalle') + ')' : ''}. Cualquier duda, estamos a sus órdenes en control escolar.`);
+        if (v('motivo') === 'Conducta') await db().insertar('anotaciones', [{alumno_id: a.id, autor_id: C.yo.id, grupo_id: dest.grupos[0]?.id || null, tipo: 'conducta', texto: `Cambio de grupo por conducta (${S.nombre} → ${dest.nombre}).${v('detalle') ? ' ' + v('detalle') : ''}`, visible_padres: true}]);
+        st.accion = null; alert(`${a.nombre} ahora está en ${dest.nombre}. Sus nuevos profesores ya lo ven en su lista.`); return recargar();
+      }
+      if (f.dataset.baja) {
+        const tipo = v('tipo'); if (!confirm(`¿Registrar la ${tipo === 'baja' ? 'baja' : 'transferencia'} de ${a.nombre}? Se le quita de todos sus grupos.`)) { btn.disabled = false; return; }
+        await db().borrar('inscripciones', {alumno_id: a.id}); await db().actualizar('personas', {estado: tipo === 'baja' ? 'baja' : 'transferido'}, {id: a.id});
+        await db().insertar('movimientos', [{alumno_id: a.id, tipo, de_grupo: S.nombre, escuela_destino: v('escuela') || null, motivo: v('motivo'), detalle: v('detalle'), hecho_por: C.yo.id}]);
+        if (f.elements.avisar.checked) await avisarFamilia(d, a, tipo === 'baja' ? `Le confirmamos que quedó registrada la baja de ${a.nombre.split(' ')[0]}. Su expediente y documentos están disponibles en control escolar.` : `Le confirmamos el trámite de transferencia de ${a.nombre.split(' ')[0]}${v('escuela') ? ' a ' + v('escuela') : ''}. Su expediente, boletas y documentos están listos en control escolar para entregarse a la nueva escuela.`);
+        st.accion = null; return recargar();
+      }
+    } catch (x) { alert('No se pudo guardar: ' + x.message); btn.disabled = false; }
+  };
+}
+function idNuevo(d, nombre, materia) {
+  let base = (slug(nombre) + (/^Grupo/.test(materia) ? '' : '-' + slug(materia).slice(0, 12))).slice(0, 40).replace(/-+$/, '') || 'G', id = base, k = 2;
+  while (d.grupos.some(g => g.id === id)) id = `${base}-${k++}`;
+  d.grupos.push({id}); return id;
+}
+
+// ---------- Importación: primero se revisa, luego se guarda ----------
+function analizarImport(hojas, d) {
+  let filasG = [], filasA = [];
+  for (const [nombre, filas] of Object.entries(hojas)) { const objs = aObjetos(filas), n = normal(nombre);
+    if (n.startsWith('grupo') || (objs[0] && 'materia' in objs[0])) filasG = filasG.concat(objs);
+    else if (n.startsWith('alumno') || (objs[0] && 'nombre' in objs[0])) filasA = filasA.concat(objs); }
+  if (!filasG.length && !filasA.length) throw new Error('No encontré las hojas "Grupos" ni "Alumnos". Usa la plantilla.');
+  const avisos = [], profesNuevos = new Map(), grupos = [], alumnos = [], salonesNuevos = new Set();
+  const profPorNombre = n => d.personas.find(p => p.rol === 'profesor' && normal(p.nombre) === normal(n));
+  for (const r of filasG) {
+    const nivel = nivelDe(r.nivel) || nivelDe(r.grupo); if (!nivel || !r.grupo || !r.materia) { avisos.push(`Grupos, fila ${r._fila}: falta el nivel, el grupo o la materia.`); continue; }
+    const materia = normal(r.materia) === 'titular' ? 'Grupo (titular)' : String(r.materia), dias = diasDe(r.dias), ini = horaDe(r.inicio), fin = horaDe(r.fin);
+    if (!dias.length || !ini || !fin) avisos.push(`Grupos, fila ${r._fila} (${r.grupo} · ${r.materia}): el horario no está completo; se guarda sin horario.`);
+    let prof = null; if (r.profesor) { prof = profPorNombre(r.profesor); if (!prof && !profesNuevos.has(normal(r.profesor))) profesNuevos.set(normal(r.profesor), {nombre: String(r.profesor), nivel, materia: nomMateria({materia})}); }
+    const existe = d.grupos.find(g => g.nivel === nivel && normal(g.nombre) === normal(r.grupo) && normal(g.materia) === normal(materia));
+    if (!d.salones[`${nivel}|${d.grupos.find(g => g.nivel === nivel && normal(g.nombre) === normal(r.grupo))?.nombre}`]) salonesNuevos.add(`${nivel}|${r.grupo}`);
+    grupos.push({accion: existe ? 'actualizar' : 'nueva', existe, nivel, nombre: existe?.nombre || String(r.grupo), materia, profesor: r.profesor ? String(r.profesor) : '', profId: prof?.id || null,
+      horario: dias.length && ini && fin ? dias.map(x => ({dia: x, inicio: ini, fin})) : [], aula: r.aula ? String(r.aula) : null, cambia: existe && (existe.profesor_id !== (prof?.id || existe.profesor_id) || (r.aula && existe.aula !== String(r.aula)))});
+  }
+  const salonExiste = (nivel, nombre) => Object.values(d.salones).find(s => s.nivel === nivel && normal(s.nombre) === normal(nombre)) || (grupos.some(g => g.nivel === nivel && normal(g.nombre) === normal(nombre)) ? {nombre: grupos.find(g => g.nivel === nivel && normal(g.nombre) === normal(nombre)).nombre, nuevo: true} : null);
+  for (const r of filasA) {
+    const nivel = nivelDe(r.nivel) || nivelDe(r.grupo); if (!r.nombre || !nivel || !r.grupo) { avisos.push(`Alumnos, fila ${r._fila}: falta el nombre, el nivel o el grupo.`); continue; }
+    const sal = salonExiste(nivel, r.grupo); if (!sal) { avisos.push(`Alumnos, fila ${r._fila} (${r.nombre}): el grupo "${r.grupo}" no existe ni viene en la hoja Grupos; no se importa.`); continue; }
+    const mat = r.matricula != null && r.matricula !== '' ? String(r.matricula) : null;
+    const ya = d.personas.find(p => p.rol === 'alumno' && ((mat && p.usuario === mat) || (normal(p.nombre) === normal(r.nombre) && p.nivel === nivel)));
+    const actual = ya && salonDe(d, ya.id, nivel);
+    if (ya && mat && ya.usuario === mat && normal(ya.nombre) !== normal(r.nombre)) avisos.push(`Alumnos, fila ${r._fila}: la matrícula ${mat} es de ${ya.nombre}, pero en el archivo dice "${r.nombre}". Se usa el alumno de esa matrícula.`);
+    const accion = !ya ? 'nuevo' : actual && normal(actual.nombre) === normal(sal.nombre) ? 'igual' : actual ? 'mover' : 'inscribir';
+    if (ya && ya.estado && ya.estado !== 'activo') avisos.push(`Alumnos, fila ${r._fila}: ${ya.nombre} estaba dado de baja o transferido; se reactiva.`);
+    const nac = r.nacimiento ? fechaDe(r.nacimiento) : null; if (r.nacimiento && !nac) avisos.push(`Alumnos, fila ${r._fila}: no entendí la fecha de nacimiento "${r.nacimiento}".`);
+    alumnos.push({accion, ya, actual, nivel, salon: sal.nombre, nombre: String(r.nombre), grado: r.grado ? String(r.grado) : null, matricula: mat, nacimiento: nac, tutor: r.tutor ? String(r.tutor) : '', parentesco: r.parentesco ? String(r.parentesco) : 'Mamá'});
+  }
+  return {grupos, alumnos, profesNuevos: [...profesNuevos.values()], avisos, salonesNuevos: [...salonesNuevos]};
+}
+function planHTML(p) {
+  const n = (l, a) => l.filter(x => x.accion === a).length, chip = (t, c = '') => `<span class="chip ${c}">${t}</span>`;
+  const sinCambio = n(p.alumnos, 'igual') + p.grupos.filter(g => g.accion === 'actualizar' && !g.cambia).length;
+  return `<div style="display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--linea);padding-top:12px">
+   <div class="fila"><h2 style="font-size:16px">Revisión de ${esc(p.archivo || 'tu archivo')}</h2></div>
+   <div style="display:flex;gap:6px;flex-wrap:wrap">${p.salonesNuevos.length ? chip(p.salonesNuevos.length + ' grupos nuevos', 'ok') : ''}${n(p.grupos, 'nueva') ? chip(n(p.grupos, 'nueva') + ' materias nuevas', 'ok') : ''}${p.grupos.filter(g => g.cambia).length ? chip(p.grupos.filter(g => g.cambia).length + ' materias cambian de profesor o aula', 'aviso') : ''}${p.profesNuevos.length ? chip(p.profesNuevos.length + ' profesores nuevos', 'ok') : ''}
+    ${n(p.alumnos, 'nuevo') ? chip(n(p.alumnos, 'nuevo') + ' alumnos nuevos', 'ok') : ''}${n(p.alumnos, 'inscribir') ? chip(n(p.alumnos, 'inscribir') + ' alumnos se asignan a grupo', 'ok') : ''}${n(p.alumnos, 'mover') ? chip(n(p.alumnos, 'mover') + ' alumnos cambian de grupo', 'aviso') : ''}${sinCambio ? chip(sinCambio + ' sin cambios') : ''}${p.avisos.length ? chip(p.avisos.length + ' por revisar', 'mal') : ''}</div>
+   ${p.avisos.length ? `<div class="lista">${p.avisos.slice(0, 20).map(a => `<div class="it" style="padding:6px 0"><span class="chip mal">Revisar</span><div class="t"><span style="color:var(--tinta)">${esc(a)}</span></div></div>`).join('')}</div>` : ''}
+   ${p.profesNuevos.length ? `<div><b style="font-size:13px">Profesores que se darán de alta</b><div style="font-size:13px;color:var(--gris)">${p.profesNuevos.map(x => esc(x.nombre)).join(', ')} (su cuenta para entrar se crea aparte)</div></div>` : ''}
+   ${p.alumnos.some(a => a.accion === 'mover') ? `<div><b style="font-size:13px">Cambios de grupo</b><div class="lista">${p.alumnos.filter(a => a.accion === 'mover').slice(0, 30).map(a => `<div class="it" style="padding:6px 0"><div class="t"><b style="font-size:14px">${esc(a.ya.nombre)}</b><span>${esc(a.actual.nombre)} → ${esc(a.salon)}</span></div></div>`).join('')}</div></div>` : ''}
+   <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="gimpok">Importar</button><button class="btn sec" id="gimpno">Cancelar</button><span id="gimpmsg" style="font-size:13px;color:var(--gris);align-self:center"></span></div></div>`;
+}
+async function importar(p, btn) {
+  btn.disabled = true; const msg = t => { const el = document.getElementById('gimpmsg'); if (el) el.textContent = t; };
+  try {
+    let d = await datosGrupos(); const profId = {};
+    msg('Dando de alta profesores…');
+    for (const x of p.profesNuevos) { const [r] = await db().insertar('personas', [{rol: 'profesor', nivel: x.nivel, nombre: x.nombre, grado: x.materia}]); profId[normal(x.nombre)] = r.id; }
+    msg('Guardando grupos y materias…');
+    for (const g of p.grupos) {
+      const prof = g.profId || profId[normal(g.profesor)] || null, fila = {nombre: g.nombre, nivel: g.nivel, materia: g.materia, aula: g.aula, ...(g.horario.length ? {horario: g.horario} : {}), ...(prof ? {profesor_id: prof} : {})};
+      if (g.existe) await db().actualizar('grupos', fila, {id: g.existe.id}); else await db().insertar('grupos', [{id: idNuevo(d, g.nombre, g.materia), horario: [], ...fila}]);
+    }
+    d = await datosGrupos(); const salon = (nivel, nombre) => Object.values(d.salones).find(s => s.nivel === nivel && normal(s.nombre) === normal(nombre));
+    let k = 0;
+    for (const a of p.alumnos) {
+      msg(`Alumnos: ${++k} de ${p.alumnos.length}…`); const dest = salon(a.nivel, a.salon); if (!dest) continue;
+      let id = a.ya?.id;
+      if (!id) { const [r] = await db().insertar('personas', [{rol: 'alumno', nivel: a.nivel, nombre: a.nombre, grado: a.grado, usuario: a.matricula, fecha_nacimiento: a.nacimiento}]); id = r.id; }
+      else { const cambios = {estado: 'activo', ...(a.grado ? {grado: a.grado} : {}), ...(a.nacimiento ? {fecha_nacimiento: a.nacimiento} : {})}; await db().actualizar('personas', cambios, {id}); }
+      if (a.accion === 'mover') { const viejo = salon(a.nivel, a.actual.nombre); if (viejo) await sacar(id, viejo); }
+      if (a.accion !== 'igual') { await inscribir(id, dest, d.ins);
+        await db().insertar('movimientos', [{alumno_id: id, tipo: a.accion === 'mover' ? 'cambio_grupo' : 'alta', de_grupo: a.accion === 'mover' ? a.actual.nombre : null, a_grupo: dest.nombre, motivo: 'Importación desde Excel', hecho_por: C.yo.id}]); }
+      if (a.tutor) { let papa = d.personas.find(x => x.rol === 'padre' && normal(x.nombre) === normal(a.tutor));
+        if (!papa) { [papa] = await db().insertar('personas', [{rol: 'padre', nombre: a.tutor, grado: 'Familia de ' + a.nombre.split(' ')[0]}]); d.personas.push(papa); }
+        if (!d.tutores.some(t => t.padre_id === papa.id && t.alumno_id === id)) { await db().insertar('tutores', [{padre_id: papa.id, alumno_id: id, parentesco: a.parentesco}]); d.tutores.push({padre_id: papa.id, alumno_id: id}); } }
+    }
+    const resumen = `Listo: ${p.grupos.length} materias y ${p.alumnos.length} alumnos revisados.`;
+    estGrupos.plan = null; alert(resumen); vAdminGrupos();
+  } catch (x) { msg(''); alert('La importación se detuvo: ' + x.message + '\nLo que ya se guardó se queda; puedes volver a subir el archivo y solo se aplicará lo que falte.'); btn.disabled = false; }
 }

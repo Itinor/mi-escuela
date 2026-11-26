@@ -24,7 +24,9 @@ Prototipo de rediseño de un portal escolar. Escuela, personas y datos ficticios
 
 ## Quién ve qué
 
-- **Alumno**: sus clases, asistencia, tareas (sube archivos desde secundaria), avisos y mensajes con sus profesores. En primaria la vista es más sencilla y sin mensajes.
-- **Papá o mamá**: asistencia por día, tareas, anotaciones de los maestros (las marcadas como visibles), avisos con "Enterado" y mensajes con los maestros de su hijo. En universidad solo si el alumno lo autoriza.
-- **Profesor**: sus grupos con pase de lista, tareas y calificación, anotaciones por alumno y mensajes al grupo o a cada alumno o papá. En kinder y primaria registra él mismo las actividades entregadas.
-- **Administración**: resumen de toda la escuela, alumnos por nivel con alta de expedientes, profesores (última lista, pendientes por calificar) y avisos con quién los leyó.
+Con cuenta se usan las mismas pantallas completas de la demostración, con los datos de la base y ajustadas al nivel.
+
+- **Alumno**: inicio, calificaciones por periodo (con el desglose de cada materia), horario, faltas, tareas, mensajes y calendario escolar. En universidad, además, kárdex, documentos y trayectoria. Ve sus pagos solo si ya cumplió 18 años; los datos fiscales se piden dentro de Pagos. En primaria no sube archivos (su maestro marca la entrega en el salón) y no tiene mensajes.
+- **Papá o mamá**: resumen con la asistencia de la semana (clase por clase), horario de clases con qué maestro da cada materia, calificaciones y tareas (en kinder: actividades y notas de la maestra), mensajes, calendario escolar y colegiaturas con aviso de pago vencido.
+- **Profesor**: su horario de la semana, grupos con pase de lista, tareas y entregas (vista previa y calificación), anotaciones por alumno, mensajes y calificaciones con su propia forma de calificar. En kinder no hay calificación numérica.
+- **Administración**: resumen de la escuela, alumnos, calendario escolar por nivel (días sin clases, exámenes, juntas y eventos), pagos con recordatorios de adeudo, avisos y profesores. El recordatorio de pago va a los papás si el alumno es menor de edad, o al alumno si ya cumplió 18.

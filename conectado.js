@@ -103,13 +103,13 @@ function navDe(yo) {
   if (yo.rol === 'alumno') return [['c/inicio', 'Inicio', 'inicio'], ['c/tareas', yo.nivel === 'primaria' ? 'Mis tareas' : 'Tareas', 'act'], ...(yo.nivel === 'primaria' ? [] : [['c/mensajes', 'Mensajes', 'msg']])];
   if (yo.rol === 'padre') return [['c/hijo', 'Resumen', 'inicio'], ['c/hijo/mensajes', 'Mensajes', 'msg']];
   if (yo.rol === 'profesor') return [['c/grupos', 'Mis grupos', 'perfil'], ...(C.cache.misGrupos || []).map(g => [`c/g/${g.id}/lista`, g.nombre + (g.materia.startsWith('Grupo') ? '' : ' · ' + g.materia), 'lista'])];
-  return [['c/admin', 'Resumen', 'tray'], ['c/admin/alumnos', 'Alumnos', 'perfil'], ['c/admin/profesores', 'Profesores', 'lista'], ['c/admin/avisos', 'Avisos', 'msg']];
+  return [['c/admin', 'Resumen', 'tray'], ['c/admin/alumnos', 'Alumnos', 'perfil'], ['c/admin/calendario', 'Calendario escolar', 'cal'], ['c/admin/pagos', 'Pagos', 'pagos'], ['c/admin/avisos', 'Avisos', 'msg'], ['c/admin/profesores', 'Profesores', 'lista']];
 }
 function marcoC(ruta, titulo, html) {
   const yo = C.yo, nav = navDe(yo), clase = {profesor: 'prof', padre: 'padre', admin: 'admin', alumno: ''}[yo.rol];
   const activo = k => k === ruta || (ruta.startsWith('c/g/') && k.startsWith(ruta.split('/').slice(0, 3).join('/') + '/')) || (k === 'c/hijo' && ruta === 'c/hijo');
   const rolTxt = {alumno: `${NIVELES[yo.nivel] || ''} · ${yo.grado || ''}`, padre: yo.grado || 'Familia', profesor: `Profesor · ${NIVELES[yo.nivel] || ''}`, admin: 'Administración'}[yo.rol];
-  const inf = nav.slice(0, 3);
+  const inf = yo.rol === 'admin' ? [nav[0], nav[2], nav[3]] : nav.slice(0, 3);
   document.getElementById('raiz').innerHTML = `
   <div class="app ${clase}">
    <aside class="lateral"><div class="logo"><b>me</b><span>miescuela.com</span></div>
@@ -139,7 +139,7 @@ async function pintarConectado(r) {
     if (yo.rol === 'alumno') { if (r === 'c/tareas') return await vAlumnoTareas(); if (r === 'c/mensajes' && yo.nivel !== 'primaria') return await vMensajes('c/mensajes'); return await vAlumnoInicio(); }
     if (yo.rol === 'padre') { if (r === 'c/hijo/mensajes') return await vMensajes('c/hijo/mensajes'); return await vPadre(); }
     if (yo.rol === 'profesor') { if (p[1] === 'g' && C.cache.misGrupos.some(g => g.id === p[2])) return await vGrupo(p[2], p[3] || 'lista'); return await vProfGrupos(); }
-    if (yo.rol === 'admin') { if (r === 'c/admin/alumnos') return await vAdminAlumnos(); if (r === 'c/admin/profesores') return await vAdminProfesores(); if (r === 'c/admin/avisos') return await vAdminAvisos(); return await vAdmin(); }
+    if (yo.rol === 'admin') { if (r === 'c/admin/alumnos') return await vAdminAlumnos(); if (r === 'c/admin/profesores') return await vAdminProfesores(); if (r === 'c/admin/avisos') return await vAdminAvisos(); if (r === 'c/admin/calendario') return await vAdminCalendario(); if (r === 'c/admin/pagos') return await vAdminPagos(); return await vAdmin(); }
   } catch (e) { marcoC(r, 'Error', fallo(e)); }
 }
 window.pintarConectado = pintarConectado;
@@ -240,8 +240,8 @@ async function burbujaC(m, yo) {
   return `<div class="burbuja ${m.de === yo.id ? 'mia' : ''}">${m.grupo_id && !m.para ? '<small style="font-weight:700;margin:0 0 2px">Para todo el grupo</small>' : ''}${adj}${m.texto ? esc(m.texto) : ''}<small>${hora(m.creado_en)}</small></div>`;
 }
 async function vMensajes(ruta, grupoProf, cont) {
-  const yo = C.yo;
-  if (!cont) { marcoC(ruta, 'Mensajes', cargando()); cont = main(); } else cont.innerHTML = cargando();
+  const yo = C.yo, propio = !!cont;
+  if (!cont) { marcoC(ruta, 'Mensajes', cargando()); cont = main(); } else if (!cont.querySelector('.chat')) cont.innerHTML = cargando();
   const contactos = await contactosDe(yo, grupoProf);
   if (chatC && !contactos.some(c => c.id === chatC)) chatC = null;
   if (!chatC && innerWidth > 820 && contactos[0]) chatC = contactos[0].id;
@@ -253,7 +253,7 @@ async function vMensajes(ruta, grupoProf, cont) {
     <div class="burbujas" id="cbb">${hilo.length ? (await Promise.all(hilo.map(m => burbujaC(m, yo)))).join('') : '<div class="vacio">Todavía no hay mensajes.</div>'}</div>
     ${puedeEscribir ? barraEscribir('cfm', c.id.startsWith('grupo:') ? 'Aviso para todo el grupo…' : 'Escribe tu mensaje…') : ''}` : `<div class="vacio">${ic('msg')}Elige con quién hablar.</div>`}</section></div>`;
   const bb = cont.querySelector('#cbb'); if (bb) bb.scrollTop = bb.scrollHeight;
-  const recargar = () => vMensajes(ruta, grupoProf, grupoProf ? cont : null);
+  const recargar = () => vMensajes(ruta, grupoProf, propio ? cont : null);
   cont.onclick = async e => {
     const it = e.target.closest('[data-c]'); if (it) { chatC = it.dataset.c; return recargar(); }
     if (e.target.id === 'catras') { chatC = null; return recargar(); }
@@ -460,4 +460,78 @@ async function vAdminAvisos() {
   main().querySelector('#avf').onsubmit = async e => { e.preventDefault(); const f = e.target;
     try { await db().insertar('avisos', [{autor_id: C.yo.id, titulo: f.querySelector('#avt').value.trim(), texto: f.querySelector('#avx').value.trim(), nivel: f.querySelector('#avn').value || null}]); vAdminAvisos(); }
     catch (x) { alert('No se pudo publicar: ' + x.message); } };
+}
+
+// ---------- Administración: calendario escolar por nivel ----------
+const TIPOS_CAL = {sin_clase: ['Sin clases', ''], examen: ['Exámenes', 'aviso'], evento: ['Evento', 'ok'], junta: ['Junta de padres', 'ok'], inicio: ['Inicio', 'ok'], fin: ['Fin de clases', 'ok']};
+let filtroCal = '';
+async function vAdminCalendario() {
+  marcoC('c/admin/calendario', 'Calendario escolar', cargando());
+  const cal = await db().leer('calendario', {}, {orden: 'fecha'});
+  const ver = cal.filter(c => !filtroCal || !c.nivel || c.nivel === filtroCal);
+  const porMes = {}; ver.forEach(c => { const d = deIso(c.fecha), k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; (porMes[k] ??= []).push(c); });
+  const rango = c => c.fecha_fin && c.fecha_fin !== c.fecha ? `Del ${fCorta2(c.fecha)} al ${fCorta2(c.fecha_fin)}` : fLarga(c.fecha);
+  main().innerHTML = `
+   <section class="tarjeta"><h2>Agregar al calendario</h2><span style="font-size:13px;color:var(--gris)">Lo ven alumnos, papás y profesores del nivel. Los días sin clases no cuentan para la asistencia y desaparecen del pase de lista.</span>
+    <form id="calf" style="display:flex;flex-direction:column;gap:10px">
+     <div class="form"><label>Qué es<select id="calt">${Object.entries(TIPOS_CAL).map(([k, [t]]) => `<option value="${k}">${t}</option>`).join('')}</select></label><label>Para<select id="caln"><option value="">Toda la escuela</option>${Object.entries(NIVELES).map(([k, t]) => `<option value="${k}" ${k === filtroCal ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <label>Fecha<input type="date" id="calf1" required></label><label>Hasta (si dura varios días)<input type="date" id="calf2"></label></div>
+     <label>Título<input id="caltt" required placeholder="Ej. Consejo técnico escolar"></label><label>Detalle (opcional)<input id="cald" placeholder="Ej. Viernes 10:00 · Auditorio"></label>
+     <button class="btn" type="submit">Agregar</button></form></section>
+   <section class="tarjeta"><div class="tabs" id="calnv">${[['', 'Todos los niveles'], ...Object.entries(NIVELES)].map(([k, t]) => `<button data-n="${k}" class="suave ${filtroCal === k ? 'activo' : ''}">${t}</button>`).join('')}</div>
+    ${Object.entries(porMes).map(([k, cs]) => { const [y, m] = k.split('-'); return `<h2 style="font-size:15px;text-transform:capitalize;margin-top:6px">${new Date(+y, +m - 1, 1).toLocaleDateString('es-MX', {month: 'long', year: 'numeric'})}</h2>
+     <div class="lista">${cs.map(c => `<div class="it"><span class="chip ${TIPOS_CAL[c.tipo][1]}" style="white-space:nowrap">${TIPOS_CAL[c.tipo][0]}</span><div class="t"><b>${esc(c.titulo)}</b><span>${rango(c)} · ${c.nivel ? NIVELES[c.nivel] : 'Toda la escuela'}${c.descripcion ? ' · ' + esc(c.descripcion) : ''}</span></div><button class="btn sec" data-borra-cal="${c.id}" style="padding:6px 10px;font-size:12px">Quitar</button></div>`).join('')}</div>`; }).join('') || '<div class="vacio">Sin fechas en el calendario.</div>'}</section>`;
+  main().onclick = async e => {
+    const n = e.target.closest('#calnv button'); if (n) { filtroCal = n.dataset.n; return vAdminCalendario(); }
+    const b = e.target.closest('[data-borra-cal]'); if (b && confirm('¿Quitar esta fecha del calendario?')) { try { await db().borrar('calendario', {id: +b.dataset.borraCal}); vAdminCalendario(); } catch (x) { alert('No se pudo quitar: ' + x.message); } }
+  };
+  main().querySelector('#calf').onsubmit = async e => { e.preventDefault(); const q = id => main().querySelector(id).value.trim();
+    if (q('#calf2') && q('#calf2') < q('#calf1')) return alert('La fecha final es antes que la inicial.');
+    try { await db().insertar('calendario', [{tipo: q('#calt'), nivel: q('#caln') || null, fecha: q('#calf1'), fecha_fin: q('#calf2') || null, titulo: q('#caltt'), descripcion: q('#cald') || null, creado_por: C.yo.id}]); vAdminCalendario(); }
+    catch (x) { alert('No se pudo agregar: ' + x.message); } };
+}
+
+// ---------- Administración: pagos y recordatorios de adeudo ----------
+// El recordatorio va a los papás si el alumno es menor de edad; si ya tiene 18 años (universidad), al propio alumno.
+const edadDe = fn => { if (!fn) return null; const n = deIso(fn), h = new Date(); let e = h.getFullYear() - n.getFullYear(); if (h.getMonth() < n.getMonth() || (h.getMonth() === n.getMonth() && h.getDate() < n.getDate())) e--; return e; };
+const pesosC = n => '$' + (+n).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+let filtroPagos = '';
+async function vAdminPagos() {
+  marcoC('c/admin/pagos', 'Pagos', cargando());
+  const [pagos, personas, tutores] = await Promise.all([db().leer('pagos', {}, {orden: 'vence'}), db().leer('personas', {rol: ['alumno', 'padre']}), db().leer('tutores')]);
+  const P = porId(personas), hoy = iso(new Date()), mes = hoy.slice(0, 7);
+  const venc = pagos.filter(p => !p.pagado_en && p.vence < hoy), porAlumno = {};
+  venc.forEach(p => (porAlumno[p.alumno_id] ??= []).push(p));
+  const destino = a => { const e = edadDe(a.fecha_nacimiento); if (e != null && e >= 18) return {ids: [a.id], txt: 'Al alumno (mayor de edad)', sinCuenta: !a.auth_id};
+    const t = tutores.filter(x => x.alumno_id === a.id && P[x.padre_id]); return t.length ? {ids: t.map(x => x.padre_id), txt: t.map(x => `${x.parentesco}: ${P[x.padre_id].nombre}`).join(', '), sinCuenta: t.every(x => !P[x.padre_id].auth_id)} : {ids: [], txt: 'Sin tutor registrado', sinCuenta: true}; };
+  const filas = Object.entries(porAlumno).map(([id, ps]) => ({a: P[id], ps, total: ps.reduce((s, p) => s + +p.monto, 0), rec: ps.map(p => p.recordado_en).filter(Boolean).sort().at(-1)})).filter(x => x.a && (!filtroPagos || x.a.nivel === filtroPagos)).sort((x, y) => y.total - x.total);
+  const cobrado = pagos.filter(p => p.pagado_en && p.pagado_en.slice(0, 7) === mes).reduce((s, p) => s + +p.monto, 0);
+  main().innerHTML = `
+   <div class="rejilla">
+    <section class="tarjeta dato"><small>Vencido por cobrar</small><b style="color:${venc.length ? 'var(--mal)' : 'var(--ok)'}">${pesosC(venc.reduce((s, p) => s + +p.monto, 0))}</b><span>${Object.keys(porAlumno).length} alumno${Object.keys(porAlumno).length !== 1 ? 's' : ''} con adeudo</span></section>
+    <section class="tarjeta dato"><small>Cobrado este mes</small><b>${pesosC(cobrado)}</b><span>${pagos.filter(p => p.pagado_en && p.pagado_en.slice(0, 7) === mes).length} pagos</span></section>
+    <section class="tarjeta dato"><small>Por vencer</small><b>${pagos.filter(p => !p.pagado_en && p.vence >= hoy).length}</b><span>pagos del ciclo</span></section>
+   </div>
+   <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><div><h2>Adeudos</h2><span style="font-size:13px;color:var(--gris)">El recordatorio llega a Mensajes: a los papás si el alumno es menor de edad, o al alumno si ya cumplió 18.</span></div>${filas.length ? `<button class="btn" id="precall" style="padding:9px 14px;font-size:13px">Recordar a todos (${filas.filter(x => destino(x.a).ids.length).length})</button>` : ''}</div>
+    <div class="tabs" id="pnv">${[['', 'Todos'], ...Object.entries(NIVELES)].map(([k, t]) => `<button data-n="${k}" class="suave ${filtroPagos === k ? 'activo' : ''}">${t}</button>`).join('')}</div>
+    <div class="lista">${filas.map(x => { const d = destino(x.a); return `<div class="it" style="flex-wrap:wrap;align-items:flex-start"><div class="t" style="min-width:220px"><b>${esc(x.a.nombre)}</b><span>${NIVELES[x.a.nivel] || ''} · ${esc(x.a.grado || '')} · ${x.ps.map(p => esc(p.concepto)).join(', ')}</span><span style="display:block">${ic('msg', 'style="width:12px;height:12px;vertical-align:-1px"')} ${esc(d.txt)}${d.sinCuenta && d.ids.length ? ' · sin cuenta en la plataforma' : ''}${x.rec ? ' · último recordatorio ' + hora(x.rec) : ''}</span></div>
+      <b style="color:var(--mal);white-space:nowrap">${pesosC(x.total)}</b>
+      <div style="display:flex;gap:6px"><button class="btn" data-recordar="${x.a.id}" ${d.ids.length ? '' : 'disabled style="opacity:.5"'} style="padding:8px 12px;font-size:13px">${x.rec ? 'Recordar otra vez' : 'Enviar recordatorio'}</button><button class="btn sec" data-pagado="${x.a.id}" style="padding:8px 12px;font-size:13px">Registrar pago</button></div></div>`; }).join('') || `<div class="vacio">${ic('check')}Nadie tiene pagos vencidos${filtroPagos ? ' en ' + NIVELES[filtroPagos].toLowerCase() : ''}.</div>`}</div></section>`;
+  const recordar = async id => {
+    const x = filas.find(f => f.a.id === id), d = destino(x.a); if (!d.ids.length) return;
+    const nombre = x.a.nombre.split(' ')[0], conceptos = x.ps.map(p => p.concepto.toLowerCase()).join(', ');
+    const texto = d.ids[0] === x.a.id
+      ? `Hola, ${nombre}. Te recordamos que tienes pendiente ${conceptos} por ${pesosC(x.total)} (venció el ${fCorta2(x.ps[0].vence)}). Puedes pagar en línea desde la sección Pagos del portal. Si ya pagaste, ignora este mensaje.`
+      : `Buen día. Le recordamos que está pendiente ${conceptos} de ${nombre} por ${pesosC(x.total)} (venció el ${fCorta2(x.ps[0].vence)}). Puede pagar en línea desde la sección Colegiaturas del portal. Si ya pagó, por favor ignore este mensaje.`;
+    await db().insertar('mensajes', d.ids.map(para => ({de: C.yo.id, para, texto})));
+    await db().actualizar('pagos', {recordado_en: new Date().toISOString()}, {id: x.ps.map(p => p.id)});
+  };
+  main().onclick = async e => {
+    const n = e.target.closest('#pnv button'); if (n) { filtroPagos = n.dataset.n; return vAdminPagos(); }
+    const r = e.target.closest('[data-recordar]'); if (r) { r.disabled = true; try { await recordar(r.dataset.recordar); vAdminPagos(); } catch (x) { alert('No se pudo enviar: ' + x.message); r.disabled = false; } return; }
+    const pg = e.target.closest('[data-pagado]'); if (pg) { const x = filas.find(f => f.a.id === pg.dataset.pagado); if (!confirm(`¿Registrar como pagado ${x.ps.map(p => p.concepto).join(', ')} de ${x.a.nombre} (${pesosC(x.total)})?`)) return;
+      try { await db().actualizar('pagos', {pagado_en: hoy}, {id: x.ps.map(p => p.id)}); vAdminPagos(); } catch (x2) { alert('No se pudo guardar: ' + x2.message); } return; }
+    if (e.target.id === 'precall') { const con = filas.filter(x => destino(x.a).ids.length); if (!confirm(`¿Enviar el recordatorio a ${con.length} familias o alumnos?`)) return; e.target.disabled = true;
+      try { for (const x of con) await recordar(x.a.id); alert(`Listo: se enviaron ${con.length} recordatorios.`); vAdminPagos(); } catch (x) { alert('No se pudo enviar: ' + x.message); e.target.disabled = false; } }
+  };
 }

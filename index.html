@@ -79,6 +79,13 @@ td.num,th.num{text-align:right}
 .cal span{padding:10px 0;border-radius:10px}
 .cal span.hoy{background:var(--marca);color:#fff;font-weight:700}
 .cal span.fuera{color:#C9BCD9}
+.cal span{position:relative}
+.cal span.sin{background:var(--fondo);color:var(--gris);text-decoration:line-through}
+.cal span.examen{background:var(--avisof);color:var(--aviso);font-weight:700}
+.cal span.evento,.cal span.junta,.cal span.inicio,.cal span.fin{background:var(--suave);color:var(--marca);font-weight:700}
+.cal span.hoy.sin,.cal span.hoy.examen,.cal span.hoy.evento,.cal span.hoy.junta{background:var(--marca);color:#fff;text-decoration:none}
+.leyenda-cal{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--gris)}
+.leyenda-cal i{display:inline-block;width:12px;height:12px;border-radius:4px;vertical-align:-2px;margin-right:4px}
 .form{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
 .campo{display:flex;flex-direction:column;gap:2px;padding:10px 0;border-top:1px solid var(--linea)}
 .campo small{font-size:12px;color:var(--gris);font-weight:600}
@@ -362,7 +369,9 @@ const I={
  reloj:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
  bajar:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>'
 };
-const nomMat=cl=>(CICLOS.flatMap(c=>c.materias).find(m=>m[0]===cl)||[,cl])[1];
+// Modo con cuenta: REAL guarda a la persona y sus datos; PERSISTIR guarda los cambios en la base (en la demo no hace nada).
+let REAL=null;const PERSISTIR={};const MAT={};const EVENTOS_CAL=[];
+const nomMat=cl=>MAT[cl]||(CICLOS.flatMap(c=>c.materias).find(m=>m[0]===cl)||[,cl])[1];
 const min=h=>{const[a,b]=h.split(':').map(Number);return a*60+b};
 const aFecha=t=>{const[d,m,y]=t.split('/').map(Number);return new Date(y,m-1,d)};
 const hhmm=x=>String(Math.floor(x/60)).padStart(2,'0')+':'+String(x%60).padStart(2,'0');
@@ -373,8 +382,8 @@ const diasPara=f=>{const h=new Date();h.setHours(0,0,0,0);return Math.round((aFe
 const esc=t=>t.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const hoyTxt=()=>{const h=new Date();return `${String(h.getDate()).padStart(2,'0')}/${String(h.getMonth()+1).padStart(2,'0')}/${h.getFullYear()}`};
 const ahoraTxt=()=>{const h=new Date();return `${String(h.getDate()).padStart(2,'0')}/${String(h.getMonth()+1).padStart(2,'0')} · ${hhmm(h.getHours()*60+h.getMinutes())}`};
-const faltasDe=cl=>cl===PROFE.cl?Object.values(ASIST.A3).filter(d=>d[ALUMNO.matricula]==='F').length:0;
-const retardosDe=cl=>cl===PROFE.cl?Object.values(ASIST.A3).filter(d=>d[ALUMNO.matricula]==='R').length:0;
+const faltasDe=cl=>REAL?(REAL.faltas?.[cl]?.F||0):cl===PROFE.cl?Object.values(ASIST.A3).filter(d=>d[ALUMNO.matricula]==='F').length:0;
+const retardosDe=cl=>REAL?(REAL.faltas?.[cl]?.R||0):cl===PROFE.cl?Object.values(ASIST.A3).filter(d=>d[ALUMNO.matricula]==='R').length:0;
 const ic=(k,s='')=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${s}>${I[k]}</svg>`;
 
 // ---- Vista del profesor (demo): Lic. Sofía Ramírez da clases solo los sábados a 4 grupos ----
@@ -402,6 +411,8 @@ const azar=sem=>{let a=0;for(const c of sem)a=(a*31+c.charCodeAt(0))|0;return()=
 const fTxt=d=>`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 const hoy0=()=>{const h=new Date();h.setHours(0,0,0,0);return h};
 const SABADOS=(()=>{const o=[],d=aFecha(CAL.inicio),f=aFecha(CAL.fin);while(d.getDay()!==6)d.setDate(d.getDate()+1);for(;d<=f;d.setDate(d.getDate()+7))o.push(fTxt(d));return o})();
+const fechasDe=g=>REAL?(REAL.fechas?.[g]||[]):SABADOS;
+const todasFechas=()=>REAL?[...new Set(Object.values(REAL.fechas||{}).flat())].sort((a,b)=>aFecha(a)-aFecha(b)):SABADOS;
 const parcialDe=f=>CAL.parciales.find(p=>aFecha(f)>=aFecha(p.del)&&aFecha(f)<=aFecha(p.al))?.n||3;
 const conClase=f=>!CAL.inhabiles[f];
 const yaPaso=f=>aFecha(f)<hoy0();
@@ -450,7 +461,7 @@ const MSG_GRUPO={A1:[],A2:[],A3:[],A4:[]},MSG_IND={A1:{},A2:{},A3:{},A4:{}};
 MSG_GRUPO.A3.push(['prof',MENSAJES['21E035'][0][1],MENSAJES['21E035'][0][2]]);MENSAJES['21E035'][0][3]='grupo';
 MSG_IND.A3['12345601']=[['alumno','Maestra, ¿puedo entregar el ensayo el domingo? Tuve un problema familiar.','25/11 · 09:12']];
 MSG_IND.A1[ALUMNOS_G.A1[2][0]]=[['alumno','Buenas tardes, maestra. ¿El examen del parcial 3 incluye el tema de tentativa?','24/11 · 17:40']];
-const hiloInd=(g,m)=>g==='A3'&&m===ALUMNO.matricula?MENSAJES['21E035'].filter(x=>!x[3]).map(x=>[x[0]==='yo'?'alumno':'prof',x[1],x[2],null,x[4]]):(MSG_IND[g][m]||(MSG_IND[g][m]=[]));
+const hiloInd=(g,m)=>!REAL&&g==='A3'&&m===ALUMNO.matricula?MENSAJES['21E035'].filter(x=>!x[3]).map(x=>[x[0]==='yo'?'alumno':'prof',x[1],x[2],null,x[4]]):(MSG_IND[g][m]||(MSG_IND[g][m]=[]));
 function enviarProf(g,dest,txt,adj=null){const f=ahoraTxt();
  if(dest==='grupo'){MSG_GRUPO[g].push(['prof',txt,f,null,adj]);if(g==='A3')MENSAJES['21E035'].push(['prof',txt,f,'grupo',adj])}
  else if(g==='A3'&&dest===ALUMNO.matricula)MENSAJES['21E035'].push(['prof',txt,f,null,adj]);
@@ -478,14 +489,15 @@ const r1=x=>Math.round(x*10)/10;
 
 // Periodos según cuántos parciales elige el profesor. Con 3 se usa el calendario escolar; con 1 o 2 se reparte el semestre.
 function periodos(g){
- const k=esq(g).parciales;if(k===3)return CAL.parciales;
- const n=k||1,cl=SABADOS;
+ const k=esq(g).parciales;if(k===3&&!REAL)return CAL.parciales;
+ const n=k||1,cl=fechasDe(g);
  return Array.from({length:n},(_,i)=>{const tr=cl.slice(Math.round(i*cl.length/n),Math.round((i+1)*cl.length/n)),clases=tr.filter(conClase);
   return {n:i+1,del:i===0?CAL.inicio:tr[0],al:i===n-1?CAL.fin:tr.at(-1),examen:k?clases.at(-1):null}});
 }
 const periodoDe=(g,f)=>(periodos(g).find(p=>aFecha(f)>=aFecha(p.del)&&aFecha(f)<=aFecha(p.al))||periodos(g).at(-1)).n;
-const etiquetaPeriodo=(g,f)=>esq(g).parciales?`${etq(esq(g))} ${periodoDe(g,f)}`:'Semestre';
+const etiquetaPeriodo=(g,f)=>grupoDe(g)?.nivel==='kinder'?'Actividad':esq(g).parciales?`${etq(esq(g))} ${periodoDe(g,f)}`:'Semestre';
 function examenDe(g,m,n){
+ if(REAL)return EXAMENES[g]?.[m]?.[n]??null;
  const k=esq(g).parciales;if(!k)return null;const p=periodos(g)[n-1];if(!p.examen||!(yaPaso(p.examen)||p.examen===fTxt(hoy0())))return null;
  if(k===3)return EXAMENES[g][m]?.[n]??null;
  return Math.max(30,Math.min(100,Math.round(NIVEL[g+m]+(azar(`ex${g}${m}${k}${n}`)()-.5)*18)));
@@ -497,7 +509,7 @@ function calcPeriodo(g,m,n){
  const E=esq(g),per=periodos(g)[n-1],en=f=>aFecha(f)>=aFecha(per.del)&&aFecha(f)<=aFecha(per.al);
  const ts=TAREAS_G[g].filter(t=>en(t.entrega)&&aFecha(t.entrega)<=hoy0());
  let s=0,c=0,pend=0,ent=0,falt=0;for(const t of ts){const e=t.entregas[m];if(!e){c++;falt++}else if(e.calif==null){pend++;ent++}else{s+=e.calif;c++;ent++}}
- const ses=SABADOS.filter(f=>en(f)&&ASIST[g][f]&&ASIST[g][f][m]),cuenta=k=>ses.filter(f=>ASIST[g][f][m]===k).length,P=cuenta('P'),R=cuenta('R'),F=cuenta('F');
+ const ses=fechasDe(g).filter(f=>en(f)&&ASIST[g][f]&&ASIST[g][f][m]),cuenta=k=>ses.filter(f=>ASIST[g][f][m]===k).length,P=cuenta('P'),R=cuenta('R'),F=cuenta('F');
  const val={trabajos:c?s/c:null,asistencia:ses.length?(P+R)/ses.length*100:null,examen:examenDe(g,m,n),final:finalDe(g,m)};
  const partes=E.comps.map(cp=>({cp,v:cp.fuente==='manual'?(MANUAL[g]?.[cp.id]?.[n]?.[m]??null):val[cp.fuente]}));
  const activos=partes.filter(x=>x.cp.pct>0),falta=activos.filter(x=>x.v==null),con=activos.filter(x=>x.v!=null),pctCon=con.reduce((a,x)=>a+ +x.cp.pct,0);
@@ -518,7 +530,7 @@ function alMomentoSem(g,m){const ps=periodos(g).map(p=>calcPeriodo(g,m,p.n)).map
 
 const RUTAS=[
  ['inicio','Inicio','inicio','Escolar'],['calificaciones','Calificaciones','calif','Escolar'],['kardex','Kárdex','kardex','Escolar'],['horario','Horario','reloj','Escolar'],['faltas','Faltas','faltas','Escolar'],['actividades','Tareas','act','Escolar'],['mensajes','Mensajes','msg','Escolar'],['calendario','Calendario','cal','Escolar'],
- ['pagos','Pagos','pagos','Administrativo'],['documentos','Documentos','docs','Administrativo'],['trayectoria','Trayectoria','tray','Administrativo'],['fiscales','Datos fiscales','fiscal','Administrativo'],['perfil','Mis datos','perfil','Cuenta']
+ ['pagos','Pagos','pagos','Administrativo'],['documentos','Documentos','docs','Administrativo'],['trayectoria','Trayectoria','tray','Administrativo'],['perfil','Mis datos','perfil','Cuenta']
 ];
 
 
@@ -526,27 +538,28 @@ const RUTAS_PROF=[['prof-horario','Mi horario','reloj','Profesora'],['prof-grupo
 
 const prom=a=>{const v=a.filter(x=>x!=null);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null};
 const promCiclo=c=>prom(c.materias.map(m=>m[3]));
-const cerrados=CICLOS.filter(c=>!c.actual);
-const promGeneral=prom(cerrados.flatMap(c=>c.materias.map(m=>m[3])));
-const actual=CICLOS.find(c=>c.actual);
+let cerrados=CICLOS.filter(c=>!c.actual);
+let promGeneral=prom(cerrados.flatMap(c=>c.materias.map(m=>m[3])));
+let actual=CICLOS.find(c=>c.actual);
 const fmt=n=>n==null?'—':(Number.isInteger(n)?String(n):n.toFixed(2));
 const colorNota=n=>n==null?'':n>=90?'var(--ok)':n>=80?'var(--tinta)':n>=70?'var(--aviso)':'var(--mal)';
 
 function marco(ruta,titulo,html){
- const prof=ruta.startsWith('prof-'),padre=ruta.startsWith('padres'),lista=prof?RUTAS_PROF:padre?RUTAS_PADRES:RUTAS;
+ const prof=ruta.startsWith('prof-'),padre=ruta.startsWith('padres'),permitida=k=>!REAL||REAL.rutas.includes(k)||(prof&&k.startsWith('prof-')),lista=(prof?RUTAS_PROF:padre?RUTAS_PADRES:RUTAS).filter(r=>permitida(r[0]));
  const nav=[];let g='';
  for(const [k,t,i,gr] of lista){if(gr!==g){g=gr;nav.push(`<div class="grupo">${gr}</div>`)}nav.push(`<a href="#${k}" class="${k===ruta||k.startsWith(ruta+'/')?'activo':''}">${ic(i)}${t}</a>`)}
- const inf=prof?[['prof-horario','Horario','reloj'],['prof-grupos','Grupos','perfil']]:padre?[['padres','Resumen','inicio'],['padres-escuela','Escuela','calif'],['padres-mensajes','Mensajes','msg']]:[['inicio','Inicio','inicio'],['actividades','Tareas','act'],['mensajes','Mensajes','msg'],['calificaciones','Calif.','calif']];
- const cambio=prof||padre?`<a class="modo" href="#inicio">${ic('cambio')}Volver a la vista del alumno</a>`:`${typeof conCuentas==='function'&&conCuentas()?`<a class="modo" href="#entrar" style="border-style:solid;background:var(--suave)">${ic('perfil')}Entrar con una cuenta</a>`:''}<a class="modo" href="#prof-horario">${ic('cambio')}Ver como profesor (demo)</a><a class="modo" href="#padres">${ic('cambio')}Ver como padre de familia (demo)</a>`;
+ let inf=prof?[['prof-horario','Horario','reloj'],['prof-grupos','Grupos','perfil']]:padre?[['padres','Resumen','inicio'],['padres-escuela','Escuela','calif'],['padres-mensajes','Mensajes','msg']]:[['inicio','Inicio','inicio'],['actividades','Tareas','act'],['mensajes','Mensajes','msg'],['calificaciones','Calif.','calif']];
+ inf=inf.filter(x=>permitida(x[0]));
+ const cambio=REAL?`<a class="modo" href="#salir-c">${ic('salir')}Salir</a>`:prof||padre?`<a class="modo" href="#inicio">${ic('cambio')}Volver a la vista del alumno</a>`:`${typeof conCuentas==='function'&&conCuentas()?`<a class="modo" href="#entrar" style="border-style:solid;background:var(--suave)">${ic('perfil')}Entrar con una cuenta</a>`:''}<a class="modo" href="#prof-horario">${ic('cambio')}Ver como profesor (demo)</a><a class="modo" href="#padres">${ic('cambio')}Ver como padre de familia (demo)</a>`;
  document.getElementById('raiz').innerHTML=`
  <div class="app ${prof?'prof':''} ${padre?'padre':''}">
   <aside class="lateral"><div class="logo"><b>me</b><span>miescuela.com</span></div><nav class="nav">${nav.join('')}</nav>${cambio}</aside>
   <div class="cuerpo">
-   <header class="barra"><h1>${titulo}</h1>${padre?`<span class="yo"><span class="avatar">${FAMILIA.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${FAMILIA.nombre} · ${FAMILIA.parentesco} de ${HIJA.nombre.split(' ')[0]}</span></span>`:prof?`<span class="yo"><span class="avatar">${PROFE.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${PROFE.nombre} · Profesora</span></span>`:`<a class="yo" href="#perfil" aria-label="Mis datos"><span class="avatar">${ALUMNO.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${ALUMNO.nombre}</span></a>`}</header>
+   <header class="barra"><h1>${titulo}</h1>${padre?`<span class="yo"><span class="avatar">${FAMILIA.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${FAMILIA.nombre} · ${FAMILIA.parentesco} de ${HIJA.nombre.split(' ')[0]}</span></span>`:prof?`<span class="yo"><span class="avatar">${PROFE.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${PROFE.nombre} · ${PROFE.titulo||'Profesora'}</span></span>`:`<a class="yo" href="#perfil" aria-label="Mis datos"><span class="avatar">${ALUMNO.iniciales}</span><span class="nom" style="font-size:14px;font-weight:600">${ALUMNO.nombre}</span></a>`}</header>
    <main>${html}</main>
   </div>
  </div>
- <nav class="inferior">${inf.map(([k,t,i])=>`<a href="#${k}" class="${k===ruta||ruta.startsWith('prof-g')&&k==='prof-grupos'?'activo':''}">${ic(i)}${t}</a>`).join('')}${prof||padre?`<a href="#inicio">${ic('cambio')}Alumno</a>`:`<button id="bmas" class="${inf.some(x=>x[0]===ruta)?'':'activo'}">${ic('mas')}Más</button>`}</nav>`;
+ <nav class="inferior">${inf.map(([k,t,i])=>`<a href="#${k}" class="${k===ruta||ruta.startsWith('prof-g')&&k==='prof-grupos'?'activo':''}">${ic(i)}${t}</a>`).join('')}${REAL&&(prof||padre)?`<a href="#salir-c">${ic('salir')}Salir</a>`:prof||padre?`<a href="#inicio">${ic('cambio')}Alumno</a>`:`<button id="bmas" class="${inf.some(x=>x[0]===ruta)?'':'activo'}">${ic('mas')}Más</button>`}</nav>`;
  if(!prof&&!padre)document.getElementById('bmas').onclick=abrirMas;
  setTimeout(revelar,0);
  window.scrollTo(0,0);
@@ -554,15 +567,15 @@ function marco(ruta,titulo,html){
 
 function abrirMas(){
  const d=document.createElement('div');d.className='hoja-fondo';
- const extra=RUTAS.filter(r=>!['inicio','actividades','mensajes','calificaciones'].includes(r[0]));
- d.innerHTML=`<div class="hoja">${extra.map(([k,t,i])=>`<a href="#${k}">${ic(i)}${t}</a>`).join('')}<a href="#prof-horario">${ic('cambio')}Vista profesor</a><a href="#padres">${ic('cambio')}Vista padres</a></div>`;
+ const extra=RUTAS.filter(r=>!['inicio','actividades','mensajes','calificaciones'].includes(r[0])&&(!REAL||REAL.rutas.includes(r[0])));
+ d.innerHTML=`<div class="hoja">${extra.map(([k,t,i])=>`<a href="#${k}">${ic(i)}${t}</a>`).join('')}${REAL?`<a href="#salir-c">${ic('salir')}Salir</a>`:`<a href="#prof-horario">${ic('cambio')}Vista profesor</a><a href="#padres">${ic('cambio')}Vista padres</a>`}</div>`;
  d.onclick=e=>{if(e.target===d||e.target.closest('a'))d.remove()};
  document.body.appendChild(d);
 }
 
 function itemMateria(m,conGrupo){
  const [cl,n,f,c,g]=m;
- const barras=conGrupo&&c!=null?`<div class="barras"><div><span>Tú</span><em><i style="width:${c}%"></i></em><span class="v">${fmt(c)}</span></div><div class="g"><span>Grupo</span><em><i style="width:${g}%"></i></em><span class="v">${fmt(g)}</span></div></div>`:'';
+ const barras=conGrupo&&c!=null?`<div class="barras"><div><span>Tú</span><em><i style="width:${c}%"></i></em><span class="v">${fmt(c)}</span></div>${g!=null?`<div class="g"><span>Grupo</span><em><i style="width:${g}%"></i></em><span class="v">${fmt(g)}</span></div>`:''}</div>`:'';
  return `<div class="it"><div class="t"><b>${n}</b><span>${cl}${f?' · '+f:' · Sin capturar'}</span>${barras}</div><span class="nota ${c==null?'vacia':''}" style="color:${colorNota(c)}">${c==null?'Pendiente':fmt(c)}</span></div>`;
 }
 
@@ -667,7 +680,8 @@ const V={
      <a class="it" href="#" onclick="return false"><div class="t"><b>Aviso de privacidad</b><span>PDF</span></div>${ic('bajar','style="width:18px;height:18px"')}</a>
      <a class="it" href="#" onclick="return false"><div class="t"><b>Manual para pagar</b><span>PDF</span></div>${ic('bajar','style="width:18px;height:18px"')}</a>
     </div></section>
-  </div>`;
+  </div>
+  ${V.fiscales()}`;
  },
  documentos(){
   return `<div class="rejilla">
@@ -680,7 +694,7 @@ const V={
   <div class="lista">${ESTADOS.map(([f,c,e,g])=>`<div class="it"><div class="t"><b>${g} semestre · ${c}</b><span>${f} · ${ALUMNO.tipo} · ${ALUMNO.turno}</span></div><span class="chip ${e==='Activo'?'ok':''}">${e}</span></div>`).join('')}</div></section>`;
  },
  fiscales(){
-  return `<section class="tarjeta"><h2>Datos para facturar</h2><span style="font-size:14px;color:var(--gris)">Llénalos una vez y tus facturas se generarán solas con cada pago.</span>
+  return `<section class="tarjeta" id="fiscales"><h2>Datos para facturar</h2><span style="font-size:14px;color:var(--gris)">Se piden al pagar la colegiatura. Llénalos una vez y la factura de cada pago se genera sola.</span>
   <div class="form"><label>Nombre o razón social<input></label><label>RFC<input style="text-transform:uppercase"></label><label>Tipo de persona<select><option>Selecciona…</option><option>Física</option><option>Moral</option></select></label><label>Régimen fiscal<select><option>Selecciona…</option></select></label><label>Uso de CFDI<select><option>Selecciona…</option></select></label><label>Código postal<input inputmode="numeric"></label></div>
   <button class="btn" onclick="alert('Prototipo: datos guardados.')">Guardar</button></section>`;
  },
@@ -703,8 +717,8 @@ function pintarHorario(nombre,diaSel){
  const chip=terminado?'<span class="chip">Terminado</span>':porEmpezar?'<span class="chip aviso">Próximo</span>':'<span class="chip ok">En curso</span>';
  const conClase=[...new Set(c.map(x=>x.dia))];
  const dias=[1,2,3,4,5].concat(conClase.includes(6)?[6]:[]);
- const t0=Math.floor(Math.min(...c.map(x=>min(x.i)))/60)*60,t1=Math.ceil(Math.max(...c.map(x=>min(x.f)))/60)*60,paso=30,filas=(t1-t0)/paso;
- const fila=t=>2+(t-t0)/paso;
+ const t0=Math.floor(Math.min(...c.map(x=>min(x.i)))/60)*60,t1=Math.ceil(Math.max(...c.map(x=>min(x.f)))/60)*60,paso=c.some(x=>min(x.i)%30||min(x.f)%30)?10:30,filas=(t1-t0)/paso,alto=paso===10?11:28;
+ const fila=t=>2+Math.round((t-t0)/paso);
  let g='<div></div>'+dias.map((d,k)=>`<div class="cab ${vigente&&d===hoyDia?'hoy':''}" style="grid-column:${k+2}">${DIAS[d]}</div>`).join('');
  for(let r=0;r<filas;r++){const t=t0+r*paso;g+=`<div class="hr" style="grid-row:${r+2};grid-column:1">${t%60===0?hhmm(t):''}</div>`+dias.map((d,k)=>`<div class="celda" style="grid-row:${r+2};grid-column:${k+2}"></div>`).join('')}
  dias.forEach((d,k)=>{if(!conClase.includes(d))g+=`<div class="libre" style="grid-column:${k+2}"></div>`});
@@ -714,7 +728,7 @@ function pintarHorario(nombre,diaSel){
  const resumen=conClase.map(d=>{const cd=c.filter(x=>x.dia===d);return `${DIAS[d].toLowerCase()} de ${cd[0].i} a ${cd.at(-1).f}`}).join(' · ');
  el.innerHTML=`<section class="tarjeta">
   <div class="fila"><div><h2>${b.nombre} · ${new Set(c.map(x=>x.cl)).size} materias</h2><span style="font-size:13px;color:var(--gris)">Del ${b.del} al ${b.al} · ${resumen}</span></div>${chip}</div>
-  <div class="semana solo-escritorio" style="grid-template-columns:52px repeat(${dias.length},1fr);grid-template-rows:auto repeat(${filas},28px)">${g}</div>
+  <div class="semana solo-escritorio" style="grid-template-columns:52px repeat(${dias.length},1fr);grid-template-rows:auto repeat(${filas},${alto}px)">${g}</div>
   <div class="solo-movil"><div class="dias" id="hd">${dias.map(d=>`<button data-d="${d}" class="${d===sel?'activo':''} ${conClase.includes(d)?'':'sin'}">${DIAS[d].slice(0,3)}</button>`).join('')}</div><div class="hor">${lista}</div></div>
  </section>`;
  document.querySelectorAll('#hb button').forEach(x=>x.classList.toggle('activo',x.dataset.b===nombre));
@@ -733,7 +747,7 @@ function tarjetaTarea(t){
   ${t.comentario?`<div class="coment"><b>Comentario del profesor:</b> ${t.comentario}</div>`:''}
   <div class="acc">
    ${t.estado==='pendiente'?`<label class="btn" style="flex-direction:row;color:#fff;font-size:13px;cursor:pointer">${ic('subir','style="width:16px;height:16px"')} Subir mi entrega<input type="file" data-t="${t.id}" hidden></label>`:''}
-   ${t.blob?`<button class="btn sec" data-ver="${t.id}">${ic('ojo','style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Ver mi entrega</button>`:''}
+   ${t.blob||t.ruta?`<button class="btn sec" data-ver="${t.id}">${ic('ojo','style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Ver mi entrega</button>`:''}
    ${t.estado==='entregada'?`<button class="btn sec" data-quitar="${t.id}">Cambiar archivo</button>`:''}
    <a class="btn sec" href="#mensajes" data-hablar="${t.cl}">${ic('msg','style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Preguntar al profesor</a>
   </div></article>`;
@@ -824,6 +838,7 @@ const VISOR={
   const msj=x=>{if(caja())caja().innerHTML=`<div class="msj">${x}</div>`};
   if(!blob&&url)blob=await fetch(url).then(r=>r.ok?r.blob():null).catch(()=>null);
   document.getElementById('vb').onclick=()=>{if(!blob)return alert('Prototipo: este archivo de ejemplo no tiene contenido para descargar.');const u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=nombre;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),6e4)};
+  if(!blob&&!url)return msj('Esta entrega se registró en el salón, así que no hay archivo que mostrar.');
   if(t==='office')return msj(`${ic('docs','style="width:40px;height:40px;color:#C9BCD9;display:block;margin:0 auto 8px"')}Los archivos de Word, Excel y PowerPoint se ven aquí cuando la plataforma tiene servidor (con el visor de Microsoft).<br>En este prototipo, descárgalo para abrirlo.<br><br><b>Tip para alumnos:</b> si lo entregas en PDF, el profesor lo lee al instante.`);
   if(!blob)return msj('No se pudo abrir el archivo. Revisa tu internet.');
   const u=URL.createObjectURL(blob);
@@ -843,38 +858,49 @@ const VISOR={
 const grupoDe=id=>GRUPOS_PROF.find(x=>x.id===id);
 const nomAlumno=(g,m)=>(ALUMNOS_G[g].find(a=>a[0]===m)||[,''])[1];
 const inic=n=>n.split(' ').slice(0,2).map(x=>x[0]).join('');
-const proximoSabado=()=>SABADOS.find(f=>!yaPaso(f)&&conClase(f))||SABADOS.at(-1);
-const ultimaClase=()=>[...SABADOS].reverse().find(f=>(yaPaso(f)||f===fTxt(hoy0()))&&conClase(f))||SABADOS[0];
+const proximoSabado=()=>{const L=todasFechas();return L.find(f=>!yaPaso(f)&&conClase(f))||L.at(-1)};
+const ultimaClase=g=>{const L=g?fechasDe(g):todasFechas();return [...L].reverse().find(f=>(yaPaso(f)||f===fTxt(hoy0()))&&conClase(f))||L[0]};
+const nomGrupo=id=>grupoDe(id)?.nombre||('Grupo '+id);
+const diaTxt=f=>DIAS[(aFecha(f).getDay()+6)%7+1]||'Domingo';
 const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 const fCorta=f=>{const d=aFecha(f);return `${d.getDate()} ${MESES[d.getMonth()]}`};
-const porCalificar=g=>TAREAS_G[g].reduce((a,t)=>a+Object.values(t.entregas).filter(e=>e.calif==null).length,0);
+const porCalificar=g=>grupoDe(g)?.nivel==='kinder'?0:TAREAS_G[g].reduce((a,t)=>a+Object.values(t.entregas).filter(e=>e.calif==null).length,0);
 const nuevosMsg=g=>ALUMNOS_G[g].filter(([m])=>sinLeer(g,m)).length;
 const estadoProf={chat:{},cal:{},tarea:{}};
 
 function profHorarioHTML(){
- const dias=[1,2,3,4,5,6],t0=8*60,t1=14*60,paso=30,filas=(t1-t0)/paso,fila=t=>2+(t-t0)/paso,hd=new Date().getDay();
+ // Cada grupo trae su horario [{dia,inicio,fin}]; se dibujan solo los días con clase (de lunes a sábado).
+ const bloques=GRUPOS_PROF.flatMap(x=>(x.horario||[{dia:6,inicio:x.i,fin:x.f}]).map(h=>({x,dia:h.dia,i:h.inicio,f:h.fin})));
+ const usados=[...new Set(bloques.map(b=>b.dia))].sort(),dias=[1,2,3,4,5].concat(usados.includes(6)?[6]:[]);
+ const t0=Math.floor(Math.min(...bloques.map(b=>min(b.i)),8*60)/60)*60,t1=Math.ceil(Math.max(...bloques.map(b=>min(b.f)),9*60)/60)*60,paso=30,filas=(t1-t0)/paso,fila=t=>2+Math.round((t-t0)/paso),hd=new Date().getDay();
  let g='<div></div>'+dias.map((d,k)=>`<div class="cab ${d===hd?'hoy':''}" style="grid-column:${k+2}">${DIAS[d]}</div>`).join('');
  for(let r=0;r<filas;r++){const t=t0+r*paso;g+=`<div class="hr" style="grid-row:${r+2};grid-column:1">${t%60===0?hhmm(t):''}</div>`+dias.map((d,k)=>`<div class="celda" style="grid-row:${r+2};grid-column:${k+2}"></div>`).join('')}
- dias.slice(0,5).forEach((d,k)=>g+=`<div class="libre" style="grid-column:${k+2}"></div>`);
- g+=GRUPOS_PROF.map(x=>`<a class="cl grupo-cl" data-g="${x.id}" href="#prof-g/${x.id}/lista" style="grid-column:7;grid-row:${fila(min(x.i))}/${fila(min(x.f))};color:inherit"><b>Grupo ${x.id}</b><span>${nomMat(x.cl)}</span><span>${x.i}–${x.f} · ${x.aula}</span><span>${ALUMNOS_G[x.id].length} alumnos</span></a>`).join('');
- return `<section class="tarjeta"><div class="fila"><div><h2>Mi semana</h2><span style="font-size:13px;color:var(--gris)">Toca un grupo para abrirlo. Con clic derecho (o dejando presionado en el celular) vas directo a lista, tareas, mensajes o calificaciones.</span></div><span class="chip">Próxima clase: sábado ${fCorta(proximoSabado())}</span></div>
-  <div class="semana solo-escritorio" style="grid-template-columns:52px repeat(6,1fr);grid-template-rows:auto repeat(${filas},30px)">${g}</div>
-  <div class="solo-movil"><div class="hor">${GRUPOS_PROF.map(x=>`<a class="b grupo-cl" data-g="${x.id}" href="#prof-g/${x.id}/lista" style="color:inherit"><div class="h">${x.i}<span>a ${x.f}</span></div><div class="c"><b>Grupo ${x.id} · ${nomMat(x.cl)}</b><span>Sábado · ${x.aula} · ${ALUMNOS_G[x.id].length} alumnos</span></div></a>`).join('')}</div></div></section>
+ dias.forEach((d,k)=>{if(!usados.includes(d))g+=`<div class="libre" style="grid-column:${k+2}"></div>`});
+ g+=bloques.map(b=>`<a class="cl grupo-cl" data-g="${b.x.id}" href="#prof-g/${b.x.id}/lista" style="grid-column:${dias.indexOf(b.dia)+2};grid-row:${fila(min(b.i))}/${fila(min(b.f))};color:inherit"><b>${nomGrupo(b.x.id)}</b><span>${nomMat(b.x.cl)}</span><span>${b.i}–${b.f} · ${b.x.aula}</span><span>${ALUMNOS_G[b.x.id].length} alumnos</span></a>`).join('');
+ const prox=proximoSabado();
+ const movil=dias.filter(d=>usados.includes(d)).map(d=>`<div style="font-size:12px;font-weight:700;color:var(--gris);margin:10px 0 2px">${DIAS[d]}</div>`+bloques.filter(b=>b.dia===d).sort((a,b)=>min(a.i)-min(b.i)).map(b=>`<a class="b grupo-cl" data-g="${b.x.id}" href="#prof-g/${b.x.id}/lista" style="color:inherit"><div class="h">${b.i}<span>a ${b.f}</span></div><div class="c"><b>${nomGrupo(b.x.id)} · ${nomMat(b.x.cl)}</b><span>${b.x.aula} · ${ALUMNOS_G[b.x.id].length} alumnos</span></div></a>`).join('')).join('');
+ return `<section class="tarjeta"><div class="fila"><div><h2>Mi semana</h2><span style="font-size:13px;color:var(--gris)">Toca un grupo para abrirlo. Con clic derecho (o dejando presionado en el celular) vas directo a lista, tareas, mensajes o calificaciones.</span></div>${prox?`<span class="chip">Próxima clase: ${diaTxt(prox).toLowerCase()} ${fCorta(prox)}</span>`:''}</div>
+  <div class="semana solo-escritorio" style="grid-template-columns:52px repeat(${dias.length},1fr);grid-template-rows:auto repeat(${filas},30px)">${g}</div>
+  <div class="solo-movil"><div class="hor">${movil}</div></div></section>
   ${profGruposHTML(true)}`;
 }
 function profGruposHTML(compacto){
  return `<div class="rejilla">${GRUPOS_PROF.map(x=>{const n=ALUMNOS_G[x.id].length,pc=porCalificar(x.id),nm=nuevosMsg(x.id);
   const prom=prom2(ALUMNOS_G[x.id].map(([m])=>calcSemestre(x.id,m)));
-  return `<a class="tarjeta grupo-cl" data-g="${x.id}" href="#prof-g/${x.id}/lista" style="color:inherit"><div class="fila"><h2>Grupo ${x.id}</h2><span class="chip">${x.i}–${x.f}</span></div>
+  return `<a class="tarjeta grupo-cl" data-g="${x.id}" href="#prof-g/${x.id}/lista" style="color:inherit"><div class="fila"><h2>${nomGrupo(x.id)}</h2><span class="chip">${horarioCorto(x)}</span></div>
    <span style="font-size:14px">${nomMat(x.cl)}</span><span style="font-size:12px;color:var(--gris)">${x.cl} · ${x.aula} · ${n} alumnos · promedio ${prom==null?'—':prom.toFixed(1)}</span>
    <div style="display:flex;gap:6px;flex-wrap:wrap">${pc?`<span class="chip aviso">${pc} por calificar</span>`:'<span class="chip ok">Todo calificado</span>'}${nm?`<span class="chip mal">${nm} mensaje${nm>1?'s':''} nuevo${nm>1?'s':''}</span>`:''}</div></a>`}).join('')}</div>`;
 }
+const horarioCorto=x=>{const hs=x.horario||[{dia:6,inicio:x.i,fin:x.f}],por={};hs.forEach(h=>(por[h.inicio]??=[]).push(+h.dia));
+ return Object.entries(por).map(([i,ds])=>{ds.sort();const seguidos=ds.length>2&&ds.every((d,k)=>!k||d===ds[k-1]+1);return (seguidos?DIAS[ds[0]].slice(0,3)+' a '+DIAS[ds.at(-1)].slice(0,3):ds.map(d=>DIAS[d].slice(0,3)).join(', '))+' '+i}).join(' · ')};
 const prom2=a=>{const v=a.filter(x=>x!=null);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null};
 
+// En kinder no hay calificación numérica; las anotaciones solo existen con cuenta (se guardan en la base).
+const tabsGrupo=g=>{const kinder=grupoDe(g)?.nivel==='kinder';return [['lista','Lista'],['tareas',kinder?'Actividades':'Tareas'],...(REAL?[['notas','Anotaciones']]:[]),['mensajes','Mensajes'],...(kinder?[]:[['calif','Calificaciones']])]};
 function grupoHTML(g,tab){
  const G=grupoDe(g),nm=nuevosMsg(g),pc=porCalificar(g);
- const tabs=[['lista','Lista'],['tareas','Tareas'],['mensajes','Mensajes'],['calif','Calificaciones']];
- return `<section class="tarjeta"><div class="fila"><div><h2>Grupo ${g} · ${nomMat(G.cl)}</h2><span style="font-size:13px;color:var(--gris)">${G.cl} · Sábados ${G.i}–${G.f} · ${G.aula} · ${ALUMNOS_G[g].length} alumnos</span></div><a class="btn sec" href="#prof-horario" style="padding:8px 12px;font-size:13px">← Horario</a></div></section>
+ const tabs=tabsGrupo(g);
+ return `<section class="tarjeta"><div class="fila"><div><h2>${nomGrupo(g)} · ${nomMat(G.cl)}</h2><span style="font-size:13px;color:var(--gris)">${G.cl} · ${horarioCorto(G)} · ${G.aula} · ${ALUMNOS_G[g].length} alumnos</span></div><a class="btn sec" href="#prof-horario" style="padding:8px 12px;font-size:13px">← Horario</a></div></section>
   <div class="tabs">${tabs.map(([k,t])=>`<a class="tab ${k===tab?'activo':''}" href="#prof-g/${g}/${k}">${t}${k==='mensajes'&&nm?` <span class="punto">${nm}</span>`:''}${k==='tareas'&&pc?` <span class="punto" style="background:var(--aviso)">${pc}</span>`:''}</a>`).join('')}</div>
   <div id="gp"></div>`;
 }
@@ -882,21 +908,21 @@ function grupoHTML(g,tab){
 // ----- Lista -----
 function pintarListaG(g,fecha){
  const gp=document.getElementById('gp'),ses=f=>ASIST[g][f];
- const chips=SABADOS.map(f=>{const st=!conClase(f)?'sin':ses(f)?'tomada':yaPaso(f)?'pend':'futura';return `<button data-f="${f}" class="${st} ${f===fecha?'activo':''}" title="${CAL.inhabiles[f]||''}">${fCorta(f)}<i></i></button>`}).join('');
+ const chips=fechasDe(g).map(f=>{const st=!conClase(f)?'sin':ses(f)?'tomada':yaPaso(f)?'pend':'futura';return `<button data-f="${f}" class="${st} ${f===fecha?'activo':''}" title="${CAL.inhabiles[f]||''}">${fCorta(f)}<i></i></button>`}).join('');
  let cuerpo;
- if(!conClase(fecha))cuerpo=`<div class="vacio">${ic('cal')}Sin clase este sábado: ${CAL.inhabiles[fecha]}.<br>Lo marca el calendario escolar, así que no cuenta para la asistencia.</div>`;
+ if(!conClase(fecha))cuerpo=`<div class="vacio">${ic('cal')}Sin clase este ${diaTxt(fecha).toLowerCase()}: ${CAL.inhabiles[fecha]}.<br>Lo marca el calendario escolar, así que no cuenta para la asistencia.</div>`;
  else if(!yaPaso(fecha)&&fecha!==fTxt(hoy0()))cuerpo=`<div class="vacio">${ic('reloj')}Esta clase todavía no llega. El ${fCorta(fecha)} podrás pasar lista desde aquí.</div>`;
  else{
   const reg=ASIST[g][fecha]||(ASIST[g][fecha]={}),per=PERDONADOS[g][fecha]||(PERDONADOS[g][fecha]={}),A=ALUMNOS_G[g];
   const n=k=>A.filter(([m])=>reg[m]===k).length,sin=A.filter(([m])=>!reg[m]).length;
-  const pct=m=>{const fs=SABADOS.filter(f=>ASIST[g][f]&&ASIST[g][f][m]);return fs.length?Math.round(fs.filter(f=>ASIST[g][f][m]!=='F').length/fs.length*100):null};
+  const pct=m=>{const fs=fechasDe(g).filter(f=>ASIST[g][f]&&ASIST[g][f][m]);return fs.length?Math.round(fs.filter(f=>ASIST[g][f][m]!=='F').length/fs.length*100):null};
   cuerpo=`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="chip ok">${n('P')} presentes</span><span class="chip aviso">${n('R')} retardos</span><span class="chip mal">${n('F')} faltas</span>${sin?`<span class="chip">${sin} sin marcar</span>`:''}<span style="flex:1"></span><button class="btn sec" id="ltodos" style="padding:8px 12px;font-size:13px">Todos presentes</button></div>
   <div class="lista">${A.map(([m,nom])=>{const p=pct(m);return `<div class="it"><span class="avatar" style="width:36px;height:36px;font-size:12px;color:#fff;background:${m===ALUMNO.matricula?'var(--marca)':'#8C7FA0'}">${inic(nom)}</span><div class="t"><b>${nom}</b><span>Asistencia ${p==null?'—':p+' %'}${per[m]?' · retardo perdonado':''}${reg[m]==='R'?` · <a href="#" data-perdonar="${m}" style="font-weight:600">Perdonar retardo</a>`:''}</span></div>
    <div class="seg" data-m="${m}">${['P','R','F'].map(k=>`<button data-k="${k}" class="${k} ${reg[m]===k?'on':''}" title="${{P:'Presente',R:'Retardo',F:'Falta'}[k]}">${k}</button>`).join('')}</div></div>`}).join('')}</div>
   <button class="btn" id="lguardar">Guardar lista</button>
   <span style="font-size:12px;color:var(--gris);text-align:center">P = presente · R = retardo · F = falta. Cada alumno ve su asistencia al momento en su sección de Faltas.</span>`;
  }
- gp.innerHTML=`<section class="tarjeta"><div class="fila"><h2>Pase de lista · sábado ${fCorta(fecha)}</h2><span class="chip">${etiquetaPeriodo(g,fecha)}</span></div>
+ gp.innerHTML=`<section class="tarjeta"><div class="fila"><h2>Pase de lista · ${diaTxt(fecha).toLowerCase()} ${fCorta(fecha)}</h2><span class="chip">${etiquetaPeriodo(g,fecha)}</span></div>
   <div class="fechas" id="lfs">${chips}</div>
   <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--gris)"><span><i class="pt tomada"></i>Lista tomada</span><span><i class="pt pend"></i>Falta tomar lista</span><span><i class="pt sin"></i>Sin clase (calendario)</span><span><i class="pt futura"></i>Próximas</span></div>
   <div style="display:flex;flex-direction:column;gap:12px">${cuerpo}</div></section>`;
@@ -907,7 +933,8 @@ function pintarListaG(g,fecha){
   const b=e.target.closest('.seg button');if(b){const m=b.parentNode.dataset.m;reg[m]=b.dataset.k;delete per[m];return pintarListaG(g,fecha)}
   const pr=e.target.closest('[data-perdonar]');if(pr){e.preventDefault();reg[pr.dataset.perdonar]='P';per[pr.dataset.perdonar]=1;return pintarListaG(g,fecha)}
   if(e.target.id==='ltodos'){ALUMNOS_G[g].forEach(([m])=>{if(!reg[m])reg[m]='P'});return pintarListaG(g,fecha)}
-  if(e.target.id==='lguardar'){const s=ALUMNOS_G[g].filter(([m])=>!reg[m]).length;const c=k=>ALUMNOS_G[g].filter(([m])=>reg[m]===k).length;alert(s?`Te faltan ${s} alumnos por marcar.`:`Lista del ${fecha} guardada: ${c('P')} presentes, ${c('R')} retardos, ${c('F')} faltas.`)}
+  if(e.target.id==='lguardar'){const s=ALUMNOS_G[g].filter(([m])=>!reg[m]).length;const c=k=>ALUMNOS_G[g].filter(([m])=>reg[m]===k).length;if(s)return alert(`Te faltan ${s} alumnos por marcar.`);
+   const ok=()=>alert(`Lista del ${fecha} guardada: ${c('P')} presentes, ${c('R')} retardos, ${c('F')} faltas.`);if(PERSISTIR.lista){e.target.disabled=true;PERSISTIR.lista(g,fecha).then(ok,x=>alert('No se pudo guardar: '+x.message)).finally(()=>e.target.disabled=false)}else ok()}
  };
 }
 
@@ -915,7 +942,7 @@ function pintarListaG(g,fecha){
 function pintarTareasG(g){
  const gp=document.getElementById('gp'),tid=estadoProf.tarea[g],A=ALUMNOS_G[g];
  if(tid==='nueva'){
-  gp.innerHTML=`<section class="tarjeta"><div class="fila"><h2>Nueva tarea para el grupo ${g}</h2><button class="btn sec" id="tvolver" style="padding:8px 12px;font-size:13px">Cancelar</button></div>
+  gp.innerHTML=`<section class="tarjeta"><div class="fila"><h2>Nueva tarea · ${nomGrupo(g)}</h2><button class="btn sec" id="tvolver" style="padding:8px 12px;font-size:13px">Cancelar</button></div>
    <label>Título<input id="nt" placeholder="Ej. Ensayo: etapas del proceso penal"></label>
    <label>Descripción<textarea id="nd" placeholder="Qué tienen que hacer"></textarea></label>
    <label>Requisitos (uno por renglón)<textarea id="nr" placeholder="Extensión de 3 a 5 cuartillas&#10;Al menos 3 fuentes en APA&#10;Entrega en PDF"></textarea></label>
@@ -925,43 +952,49 @@ function pintarTareasG(g){
    if(e.target.id==='tpublicar'){const ti=gp.querySelector('#nt').value.trim(),f=gp.querySelector('#nf').value;if(!ti||!f)return alert('Escribe el título y la fecha de entrega.');
     const [y,mo,d]=f.split('-'),entrega=`${d}/${mo}/${y}`,req=gp.querySelector('#nr').value.split('\n').map(x=>x.trim()).filter(Boolean),desc=gp.querySelector('#nd').value.trim()||'Sin descripción.';
     const t={id:++sigTarea,titulo:ti,parcial:parcialDe(entrega),publicada:hoyTxt(),entrega,hora:gp.querySelector('#nh').value||'23:59',desc,req,entregas:{}};
-    if(g==='A3'){const idA=Math.max(...TAREAS.map(x=>x.id))+1;TAREAS.push({id:idA,cl:grupoDe(g).cl,titulo:ti,publicada:t.publicada,entrega,hora:t.hora,estado:'pendiente',desc,req,archivo:null});t.ref=idA}
-    TAREAS_G[g].push(t);estadoProf.tarea[g]=null;pintarTareasG(g);alert(`Tarea publicada. Ya la ven los ${A.length} alumnos del grupo ${g}.`)}};
+    if(g==='A3'&&!REAL){const idA=Math.max(...TAREAS.map(x=>x.id))+1;TAREAS.push({id:idA,cl:grupoDe(g).cl,titulo:ti,publicada:t.publicada,entrega,hora:t.hora,estado:'pendiente',desc,req,archivo:null});t.ref=idA}
+    const listo=()=>{TAREAS_G[g].push(t);estadoProf.tarea[g]=null;pintarTareasG(g);alert(`Tarea publicada. Ya la ven los ${A.length} alumnos de ${nomGrupo(g)}.`)};
+    if(PERSISTIR.tarea)PERSISTIR.tarea(g,t).then(listo,x=>alert('No se pudo publicar: '+x.message));else listo()}};
   return;
  }
  if(tid){
   const t=TAREAS_G[g].find(x=>x.id===tid),E=t.entregas,ent=A.filter(([m])=>E[m]),cal=ent.filter(([m])=>E[m].calif!=null);
+  // En kinder y primaria el maestro marca quién entregó (los niños no suben archivos).
+  const kinder=grupoDe(g)?.nivel==='kinder',registra=!!REAL&&['kinder','primaria'].includes(grupoDe(g)?.nivel);
   gp.innerHTML=`<section class="tarjeta"><div class="fila" style="align-items:flex-start"><div><span style="font-size:12px;color:var(--gris)">${etiquetaPeriodo(g,t.entrega)} · entrega ${t.entrega} ${t.hora}</span><h2>${t.titulo}</h2></div><button class="btn sec" id="tvolver" style="padding:8px 12px;font-size:13px">← Tareas</button></div>
    <div style="display:flex;gap:8px;flex-wrap:wrap"><span class="chip">${ent.length} de ${A.length} entregaron</span><span class="chip ok">${cal.length} calificadas</span>${ent.length-cal.length?`<span class="chip aviso">${ent.length-cal.length} por calificar</span>`:''}${A.length-ent.length?`<span class="chip mal">${A.length-ent.length} sin entregar</span>`:''}</div>
    <div class="lista">${A.slice().sort((a,b)=>{const r=x=>!E[x[0]]?2:E[x[0]].calif==null?0:1;return r(a)-r(b)}).map(([m,nom])=>{const e=E[m];
-    return `<div class="it"><div class="t"><b>${nom}</b><span>${e?`${esc(e.archivo)} · ${e.fecha}`:yaPaso(t.entrega)?'No entregó':'Todavía no entrega'}</span></div>
-    ${e?(e.calif!=null?`<span class="nota" style="color:${colorNota(e.calif)}">${e.calif}</span>`:'<span class="chip aviso">Por calificar</span>')+`<button class="btn sec" data-abrir="${m}" style="padding:8px 12px;font-size:13px">${ic('ojo','style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}${e.calif!=null?'Ver':'Ver y calificar'}</button>`:`<button class="btn sec" data-msg="${m}" style="padding:8px 12px;font-size:13px">${ic('msg','style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Escribirle</button>`}</div>`}).join('')}</div></section>`;
+    return `<div class="it"><div class="t"><b>${nom}</b><span>${e?`${e.archivo?esc(e.archivo)+' · ':''}${e.fecha}`:yaPaso(t.entrega)?'No entregó':'Todavía no entrega'}</span></div>
+    ${registra?`<button class="btn ${e?'':'sec'}" data-registrar="${m}" style="padding:8px 12px;font-size:13px">${e?'✓ Entregada':'Marcar entregada'}</button>`:''}
+    ${e&&!kinder?(e.calif!=null?`<span class="nota" style="color:${colorNota(e.calif)}">${e.calif}</span>`:'<span class="chip aviso">Por calificar</span>')+`<button class="btn sec" data-abrir="${m}" style="padding:8px 12px;font-size:13px">${ic('ojo','style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}${e.calif!=null?'Ver':e.archivo?'Ver y calificar':'Calificar'}</button>`:e?'':`<button class="btn sec" data-msg="${m}" style="padding:8px 12px;font-size:13px">${ic('msg','style="width:16px;height:16px;vertical-align:-3px;margin-right:4px"')}Escribirle</button>`}</div>`}).join('')}</div></section>`;
   gp.onclick=e=>{if(e.target.id==='tvolver'){estadoProf.tarea[g]=null;return pintarTareasG(g)}
    const b=e.target.closest('[data-abrir]');if(b)abrirEntregaG(g,t,b.dataset.abrir);
+   const rg=e.target.closest('[data-registrar]');if(rg&&PERSISTIR.registrar){rg.disabled=true;PERSISTIR.registrar(g,t,rg.dataset.registrar).then(()=>pintarTareasG(g),x=>{alert('No se pudo guardar: '+x.message);rg.disabled=false})}
    const mm=e.target.closest('[data-msg]');if(mm){estadoProf.chat[g]=mm.dataset.msg;location.hash=`#prof-g/${g}/mensajes`}};
   return;
  }
  const lista=TAREAS_G[g].slice().sort((a,b)=>aFecha(b.entrega)-aFecha(a.entrega));
- gp.innerHTML=`<section class="tarjeta"><div class="fila"><h2>Tareas del grupo</h2><button class="btn" id="tnueva" style="padding:9px 14px;font-size:13px">+ Nueva tarea</button></div>
-  <div class="lista">${lista.map(t=>{const n=Object.keys(t.entregas).length,pc=Object.values(t.entregas).filter(e=>e.calif==null).length;
+ gp.innerHTML=`<section class="tarjeta"><div class="fila"><h2>${grupoDe(g)?.nivel==='kinder'?'Actividades del grupo':'Tareas del grupo'}</h2><button class="btn" id="tnueva" style="padding:9px 14px;font-size:13px">+ ${grupoDe(g)?.nivel==='kinder'?'Nueva actividad':'Nueva tarea'}</button></div>
+  <div class="lista">${lista.map(t=>{const n=Object.keys(t.entregas).length,pc=grupoDe(g)?.nivel==='kinder'?0:Object.values(t.entregas).filter(e=>e.calif==null).length;
    return `<a class="it" href="#" data-t="${t.id}" style="color:inherit"><div class="t"><b>${t.titulo}</b><span>${etiquetaPeriodo(g,t.entrega)} · entrega ${t.entrega}${yaPaso(t.entrega)?'':' · abierta'}</span></div>
-   <span class="chip">${n}/${A.length}</span>${pc?`<span class="chip aviso">${pc} por calificar</span>`:n?'<span class="chip ok">Calificada</span>':''}</a>`}).join('')}</div></section>`;
+   <span class="chip">${n}/${A.length}</span>${pc?`<span class="chip aviso">${pc} por calificar</span>`:n&&grupoDe(g)?.nivel!=='kinder'?'<span class="chip ok">Calificada</span>':''}</a>`}).join('')}</div></section>`;
  gp.onclick=e=>{if(e.target.id==='tnueva'){estadoProf.tarea[g]='nueva';return pintarTareasG(g)}const a=e.target.closest('[data-t]');if(a){e.preventDefault();estadoProf.tarea[g]=+a.dataset.t;pintarTareasG(g)}};
 }
-function abrirEntregaG(g,t,m){
+async function abrirEntregaG(g,t,m){
  const e=t.entregas[m],nom=nomAlumno(g,m);
- const panel=`<div><span style="font-size:12px;color:var(--gris)">${t.titulo} · entregó el ${e.fecha}</span><h2 style="font-size:18px">${nom}</h2></div>
+ if(e.ruta&&!e.url&&PERSISTIR.url)e.url=await PERSISTIR.url('entregas',e.ruta).catch(()=>null);
+ const panel=`<div><span style="font-size:12px;color:var(--gris)">${t.titulo} · ${e.archivo?'entregó el':'registrada el'} ${e.fecha}</span><h2 style="font-size:18px">${nom}</h2></div>
   <label>Calificación (0 a 100)<input id="vcal" type="number" min="0" max="100" inputmode="numeric" value="${e.calif??''}" placeholder="Ej. 90"></label>
   <div class="rapidas">${[100,95,90,80,70,60].map(v=>`<button data-v="${v}" class="${e.calif===v?'on':''}">${v}</button>`).join('')}</div>
   <label>Comentario para el alumno (opcional)<textarea id="vcom" placeholder="Ej. Buen trabajo, revisa las citas.">${esc(e.coment||'')}</textarea></label>
   <button class="btn" id="vguardar">Guardar calificación</button>
   <span style="font-size:12px;color:var(--gris)">El alumno la ve al instante. No necesitas descargar el archivo.</span>`;
- VISOR.abrir({nombre:e.archivo,url:e.url,blob:e.blob,panel});
+ VISOR.abrir({nombre:e.archivo||'Entregada en el salón',url:e.url,blob:e.blob,panel});
  const vp=document.getElementById('vp');
  vp.onclick=ev=>{const r=ev.target.closest('.rapidas button');if(r){vp.querySelector('#vcal').value=r.dataset.v;vp.querySelectorAll('.rapidas button').forEach(x=>x.classList.toggle('on',x===r))}
   if(ev.target.id==='vguardar'){const raw=vp.querySelector('#vcal').value,v=Number(raw);if(raw===''||!(v>=0&&v<=100))return alert('Escribe una calificación de 0 a 100.');
-   e.calif=v;e.coment=vp.querySelector('#vcom').value.trim();
-   if(g==='A3'&&m===ALUMNO.matricula&&t.ref){const ta=TAREAS.find(x=>x.id===t.ref);if(ta){ta.estado='calificada';ta.calif=v;ta.comentario=e.coment||null}}
+   e.calif=v;e.coment=vp.querySelector('#vcom').value.trim();PERSISTIR.calificar?.(g,t,m,e).catch(x=>alert('No se pudo guardar: '+x.message));
+   if(g==='A3'&&!REAL&&m===ALUMNO.matricula&&t.ref){const ta=TAREAS.find(x=>x.id===t.ref);if(ta){ta.estado='calificada';ta.calif=v;ta.comentario=e.coment||null}}
    VISOR.cerrar();pintarTareasG(g)}};
 }
 
@@ -1029,11 +1062,11 @@ function pintarCalifG(g){
  const ver=filas.filter(f=>!st.busca||sinAcentos(f.nom).includes(st.busca)||f.m.includes(st.busca));
  ver.sort(st.orden==='nombre'?(a,b)=>a.nom.localeCompare(b.nom):st.orden==='riesgo'?(a,b)=>(valor(a)??999)-(valor(b)??999):(a,b)=>(valor(b)??-1)-(valor(a)??-1));
  const gris=(v,t)=>`<span style="color:var(--gris)">${v}<br><span style="font-size:11px">${t}</span></span>`;
- const celdaPer=(p,n)=>{const r=p.partes.map(x=>{const id=`${x.cp.id}`;return x.cp.fuente==='manual'?`<td class="num"><input class="cap" type="number" min="0" max="100" data-c="${id}" data-n="${n}" data-m="${p.m}" value="${x.v??''}" placeholder="—" aria-label="${esc(x.cp.nombre)}"></td>`:`<td class="num ocultar-movil">${x.cp.fuente==='asistencia'&&x.v!=null?num(x.v)+' %':num(x.v)}</td>`}).join('');
+ const celdaPer=(p,n)=>{const r=p.partes.map(x=>{const cap=x.cp.fuente==='manual'||(REAL&&x.cp.fuente==='examen'),id=x.cp.fuente==='examen'?'examen':`${x.cp.id}`;return cap?`<td class="num"><input class="cap" type="number" min="0" max="100" data-c="${id}" data-n="${n}" data-m="${p.m}" value="${x.v??''}" placeholder="—" aria-label="${esc(x.cp.nombre)}"></td>`:`<td class="num ocultar-movil">${x.cp.fuente==='asistencia'&&x.v!=null?num(x.v)+' %':num(x.v)}</td>`}).join('');
   return r+`<td class="num" data-fin="${p.m}">${califCelda(p)}</td>`};
  const califCelda=p=>p.final!=null&&!p.abierto?`<b style="color:${colorNota(p.final)}">${num(p.final,1)}</b>`:p.final!=null?gris(num(p.final,1),'en curso'):p.alMomento!=null?gris(num(p.alMomento,1),'falta '+p.falta.map(x=>x.cp.nombre.toLowerCase()).join(', ')):'<span style="color:var(--gris);font-size:12px">—</span>';
  let cab,cuerpo;
- const rubrosCab=n=>E.comps.map(c=>c.fuente==='manual'?`<th class="num">${esc(c.nombre)} ${c.pct}%<br><button class="mini-btn" data-llenar="${c.id}" data-n="${n}">Llenar vacíos</button></th>`:`<th class="num ocultar-movil">${esc(c.nombre)} ${c.pct}%</th>`).join('');
+ const rubrosCab=n=>E.comps.map(c=>c.fuente==='manual'||(REAL&&c.fuente==='examen')?`<th class="num">${esc(c.nombre)} ${c.pct}%<br><button class="mini-btn" data-llenar="${c.fuente==='examen'?'examen':c.id}" data-n="${n}">Llenar vacíos</button></th>`:`<th class="num ocultar-movil">${esc(c.nombre)} ${c.pct}%</th>`).join('');
  if(st.vista==='sem'&&k){
   cab=PS.map(p=>`<th class="num">${etq(E)[0]}${p.n}</th>`).join('')+(E.final?'<th class="num">Final</th>':'')+'<th class="num">Semestre</th>';
   cuerpo=f=>f.ps.map(p=>`<td class="num">${p.final!=null&&!p.abierto?num(p.final,1):p.final!=null||p.alMomento!=null?gris(num(p.final??p.alMomento,1),'en curso'):'—'}</td>`).join('')+(E.final?`<td class="num">${finalDe(g,f.m)??`<span style="color:var(--gris);font-size:12px">${fCorta(EXAMEN_FINAL)}</span>`}</td>`:'')+`<td class="num">${f.sem!=null?`<b style="color:${colorNota(f.sem)}">${num(f.sem,1)}</b>`:f.hoy!=null?gris(num(f.hoy,1),'al momento'):'—'}</td>`;
@@ -1041,7 +1074,7 @@ function pintarCalifG(g){
  const vistas=k?[...PS.map(p=>[`p${p.n}`,`${etq(E)} ${p.n}${!yaPaso(p.al)?' · en curso':''}`]),['sem','Semestre']]:[['sem','Semestre (sin periodos)']];
  gp.innerHTML=`
   <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><div style="flex:1;min-width:220px"><h2>Cómo califico a este grupo</h2><span style="font-size:13px;color:var(--gris)">${esc(E.nombre)}: ${resumenEsq(E)}</span></div>${PONDER[g]?'<span class="chip aviso">Personalizada por ti</span>':'<span class="chip ok">Recomendación de dirección</span>'}<button class="btn sec" id="cedit" style="padding:8px 12px;font-size:13px">${st.editar?'Cerrar':'Cambiar'}</button></div>
-   ${HIST[g].length&&!st.editar?`<span style="font-size:12px;color:var(--gris)">Último cambio: ${HIST[g].at(-1).fecha} · ${esc(HIST[g].at(-1).texto)}${HIST[g].length>1?` (${HIST[g].length} cambios)`:''}</span>`:''}
+   ${(HIST[g]??=[]).length&&!st.editar?`<span style="font-size:12px;color:var(--gris)">Último cambio: ${HIST[g].at(-1).fecha} · ${esc(HIST[g].at(-1).texto)}${HIST[g].length>1?` (${HIST[g].length} cambios)`:''}</span>`:''}
    ${st.editar?editorHTML(g,st):''}</section>
   <div class="tabs" id="cv">${vistas.map(([v,t])=>`<button data-v="${v}" class="${st.vista===v?'activo':''}">${t}</button>`).join('')}</div>
   <div class="rejilla">
@@ -1050,7 +1083,7 @@ function pintarCalifG(g){
    <section class="tarjeta dato"><small>Aprobados (${CAL.minima} o más)</small><b>${vals.filter(v=>v>=CAL.minima).length}/${vals.length}</b><span>${vals.filter(v=>v<70).length} en riesgo (menos de 70)</span></section>
   </div>${st.vista==='sem'?`<span style="font-size:13px;color:var(--gris)">${k?`El semestre es el promedio de los ${etqPl(E).toLowerCase()} cerrados${E.final?` y el examen final (${E.final} %) se aplica el ${EXAMEN_FINAL}`:''}. En gris: lo que llevan al momento.`:'En gris: lo que llevan al momento con lo ya calificado.'}</span>`:''}
   <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><input id="cbusca" placeholder="Buscar alumno o matrícula" value="${esc(st.busca)}" style="flex:1;min-width:180px"><div class="tabs" id="cord">${[['prom','Mejor promedio'],['riesgo','En riesgo primero'],['nombre','Nombre']].map(([o,t])=>`<button data-o="${o}" class="suave ${st.orden===o?'activo':''}">${t}</button>`).join('')}</div></div>
-   <div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Alumno</th>${cab}</tr></thead><tbody>${ver.map(f=>`<tr data-al="${f.m}" style="cursor:pointer"><td style="color:var(--gris)">${rank.indexOf(f.m)+1||'—'}</td><td>${f.nom}<br><span style="font-size:12px;color:var(--gris)">${f.m} · ver desglose</span></td>${cuerpo(f)}</tr>`).join('')||`<tr><td colspan="9" class="vacio">Nadie coincide con “${esc(st.busca)}”.</td></tr>`}</tbody></table></div></section>`;
+   <div style="overflow-x:auto"><table><thead><tr><th>#</th><th>Alumno</th>${cab}</tr></thead><tbody>${ver.map(f=>`<tr data-al="${f.m}" style="cursor:pointer"><td style="color:var(--gris)">${rank.indexOf(f.m)+1||'—'}</td><td>${f.nom}<br><span style="font-size:12px;color:var(--gris)">${REAL?.usuarios?.[f.m]??f.m} · ver desglose</span></td>${cuerpo(f)}</tr>`).join('')||`<tr><td colspan="9" class="vacio">Nadie coincide con “${esc(st.busca)}”.</td></tr>`}</tbody></table></div></section>`;
  sumaRubros(gp,st);
  const q=gp.querySelector('#cbusca');q.oninput=()=>{st.busca=sinAcentos(q.value).trim();const pos=q.selectionStart;pintarCalifG(g);const q2=gp.querySelector('#cbusca');q2.focus();q2.setSelectionRange(pos,pos)};
  const eb=gp.querySelector('#ebusca');if(eb)eb.oninput=()=>{leerBorrador(gp,st);st.buscaG=eb.value;const pos=eb.selectionStart;pintarCalifG(g);const e2=gp.querySelector('#ebusca');e2.focus();e2.setSelectionRange(pos,pos)};
@@ -1058,14 +1091,15 @@ function pintarCalifG(g){
  gp.onchange=e=>{
   if(e.target.id==='eguardar'){st.guardar=e.target.checked;gp.querySelector('#enombre').classList.toggle('oculto',!st.guardar);if(st.guardar)gp.querySelector('#enombre').focus();return}
   const cp=e.target.closest('.cap');if(cp){const {c,n,m}=cp.dataset,v=cp.value===''?null:Math.max(0,Math.min(100,Number(cp.value)));
-   const M=((MANUAL[g]??={})[c]??={})[n]??={};if(v==null)delete M[m];else M[m]=v;
+   const M=c==='examen'?((EXAMENES[g]??={})[m]??={}):(((MANUAL[g]??={})[c]??={})[n]??={}),k2=c==='examen'?n:m;if(v==null)delete M[k2];else M[k2]=v;
+   PERSISTIR.captura?.(g,c,+n,[m]).catch(x=>alert('No se pudo guardar: '+x.message));
    const p=calcPeriodo(g,m,+n);gp.querySelector(`[data-fin="${m}"]`).innerHTML=califCelda(p)}
  };
  gp.onkeydown=e=>{const cp=e.target.closest('.cap');if(cp&&e.key==='Enter'){e.preventDefault();cp.blur();const ins=[...gp.querySelectorAll(`.cap[data-c="${cp.dataset.c}"]`)],sig=ins[ins.indexOf(cp)+1];if(sig)sig.focus()}};
  gp.onclick=e=>{
   if(e.target.closest('.cap'))return;
   if(e.target.id==='cedit'){st.editar=!st.editar;if(st.editar){st.borrador=copiaEsq(E);st.sel=[g];st.buscaG='';st.guardar=false;st.nombreG=''}return pintarCalifG(g)}
-  const ll=e.target.closest('[data-llenar]');if(ll){e.stopPropagation();const v=prompt('¿Qué calificación pongo a quienes no tienen? (0 a 100)','100');if(v===null||v===''||isNaN(v))return;const M=((MANUAL[g]??={})[ll.dataset.llenar]??={})[ll.dataset.n]??={};A.forEach(([m])=>{if(M[m]==null)M[m]=Math.max(0,Math.min(100,+v))});return pintarCalifG(g)}
+  const ll=e.target.closest('[data-llenar]');if(ll){e.stopPropagation();const v=prompt('¿Qué calificación pongo a quienes no tienen? (0 a 100)','100');if(v===null||v===''||isNaN(v))return;const c=ll.dataset.llenar,n=+ll.dataset.n,cambiados=[];A.forEach(([m])=>{const M=c==='examen'?((EXAMENES[g]??={})[m]??={}):(((MANUAL[g]??={})[c]??={})[n]??={}),k2=c==='examen'?n:m;if(M[k2]==null){M[k2]=Math.max(0,Math.min(100,+v));cambiados.push(m)}});PERSISTIR.captura?.(g,c,n,cambiados).catch(x=>alert('No se pudo guardar: '+x.message));return pintarCalifG(g)}
   if(st.editar){
    const fm=e.target.closest('[data-forma]');if(fm){const f=[DIRECCION,...MIS_FORMAS][+fm.dataset.forma];st.borrador=copiaEsq(f);return pintarCalifG(g)}
    const eb2=e.target.closest('#eetq button');if(eb2){leerBorrador(gp,st);st.borrador.etiqueta=eb2.dataset.etq;return pintarCalifG(g)}
@@ -1073,7 +1107,7 @@ function pintarCalifG(g){
    if(e.target.closest('#emas')){leerBorrador(gp,st);st.borrador.comps.push({id:'c'+Date.now(),nombre:'',pct:0,fuente:'manual'});pintarCalifG(g);const rs=gp.querySelectorAll('#erubros .rn');rs[rs.length-1]?.focus();return}
    const rx=e.target.closest('.rx');if(rx){leerBorrador(gp,st);st.borrador.comps.splice(+rx.closest('.rubro').dataset.i,1);return pintarCalifG(g)}
    const gb=e.target.closest('#egrupos button');if(gb){leerBorrador(gp,st);if(gb.dataset.todos)st.sel=st.sel.length===GRUPOS_PROF.length?[g]:GRUPOS_PROF.map(x=>x.id);else{const id=gb.dataset.g;st.sel=st.sel.includes(id)?st.sel.filter(x=>x!==id):[...st.sel,id]}return pintarCalifG(g)}
-   if(e.target.id==='edir'){const ant=esq(g).nombre;delete PONDER[g];HIST[g].push({fecha:ahoraTxt(),texto:`${ant} → La de dirección`});st.editar=false;return pintarCalifG(g)}
+   if(e.target.id==='edir'){const ant=esq(g).nombre;delete PONDER[g];(HIST[g]??=[]).push({fecha:ahoraTxt(),texto:`${ant} → La de dirección`});PERSISTIR.forma?.([g]).catch(x=>alert('No se pudo guardar: '+x.message));st.editar=false;return pintarCalifG(g)}
    if(e.target.id==='eaplicar'){leerBorrador(gp,st);const B=st.borrador,err=gp.querySelector('#eerror'),s=B.comps.reduce((a,c)=>a+c.pct,0);
     if(!B.comps.length)return err.textContent='Agrega al menos un rubro.';
     if(B.comps.some(c=>!c.nombre.trim()))return err.textContent='Ponle nombre a todos los rubros.';
@@ -1085,7 +1119,8 @@ function pintarCalifG(g){
     B.comps.forEach(c=>c.nombre=c.nombre.trim());
     for(const id of st.sel){const ant=esq(id);if(firmaEsq(ant)===firmaEsq(B))continue;
      if(firmaEsq(B)===firmaEsq(DIRECCION))delete PONDER[id];else PONDER[id]={...copiaEsq(B),nombre};
-     HIST[id].push({fecha:ahoraTxt(),texto:`${ant.nombre} → ${nombre}`})}
+     (HIST[id]??=[]).push({fecha:ahoraTxt(),texto:`${ant.nombre} → ${nombre}`})}
+    PERSISTIR.forma?.(st.sel).catch(x=>alert('No se pudo guardar: '+x.message));
     const n=st.sel.length;st.editar=false;pintarCalifG(g);if(n>1)alert(`Listo: se aplicó a ${n} grupos.`);return}
    return;
   }
@@ -1108,7 +1143,7 @@ function detalleAlumno(g,m){
   return `<section class="tarjeta" style="box-shadow:none;border:1px solid var(--linea)"><div class="fila"><h2>${titulo}${c.abierto?' <span class="chip" style="vertical-align:3px">en curso</span>':''}</h2><b class="nota" style="color:${colorNota(c.final)}">${c.final!=null?num(c.final,1):c.alMomento!=null?`<span style="font-size:13px;color:var(--gris)">${num(c.alMomento,1)} al momento</span>`:'<span style="font-size:13px;color:var(--gris)">pendiente</span>'}</b></div>
    <span style="font-size:12px;color:var(--gris)">Del ${p.del} al ${p.al}</span>${c.partes.map(linea).join('')}</section>`};
  const d=document.createElement('div');d.className='visor-fondo';
- d.innerHTML=`<div class="detalle"><div class="fila"><div><span style="font-size:12px;color:var(--gris)">Grupo ${g} · ${nomMat(grupoDe(g).cl)} · ${m}</span><h2>${nom}</h2></div><button class="btn sec" id="dcerrar" aria-label="Cerrar" style="padding:8px 10px">${ic('cerrar','style="width:18px;height:18px;vertical-align:-4px"')}</button></div>
+ d.innerHTML=`<div class="detalle"><div class="fila"><div><span style="font-size:12px;color:var(--gris)">${nomGrupo(g)} · ${nomMat(grupoDe(g).cl)}${REAL?'':' · '+m}</span><h2>${nom}</h2></div><button class="btn sec" id="dcerrar" aria-label="Cerrar" style="padding:8px 10px">${ic('cerrar','style="width:18px;height:18px;vertical-align:-4px"')}</button></div>
   <div class="hero" style="background:linear-gradient(135deg,#1F5F45,#145536);padding:16px"><p>${sem!=null?'Calificación del semestre':'Lleva al momento'}</p><h2>${num(sem??hoy,1)}</h2><p>${(sem??hoy)==null?'Sin calificaciones todavía':(sem??hoy)>=CAL.minima?'Va aprobando':'Va reprobando'} · ${esc(E.nombre)}</p></div>
   ${periodos(g).map(bloque).join('')}
   ${E.parciales&&E.final?(()=>{const ps=periodos(g).map(p=>calcPeriodo(g,m,p.n)).filter(c=>!c.abierto&&c.final!=null).map(c=>c.final),pp=prom2(ps),ef=finalDe(g,m);return `<section class="tarjeta" style="box-shadow:none;border:1px solid var(--linea)"><div class="fila"><h2>Examen final</h2><b class="nota">${ef??'<span style="font-size:13px;color:var(--gris)">pendiente</span>'}</b></div>
@@ -1122,7 +1157,8 @@ function detalleAlumno(g,m){
 function menuGrupo(g,x,y){
  document.querySelector('.menu-g')?.remove();
  const mn=document.createElement('div');mn.className='menu-g';
- mn.innerHTML=`<b>Grupo ${g} · ${nomMat(grupoDe(g).cl)}</b>${[['lista','Pasar lista','lista'],['tareas','Tareas y entregas','act'],['mensajes','Mensajes','msg'],['calif','Calificaciones','calif']].map(([k,t,i])=>`<a href="#prof-g/${g}/${k}">${ic(i)}${t}</a>`).join('')}`;
+ const ico={lista:'lista',tareas:'act',notas:'docs',mensajes:'msg',calif:'calif'};
+ mn.innerHTML=`<b>${nomGrupo(g)} · ${nomMat(grupoDe(g).cl)}</b>${tabsGrupo(g).map(([k,t])=>[k,k==='lista'?'Pasar lista':k==='tareas'?t+' y entregas':t,ico[k]]).map(([k,t,i])=>`<a href="#prof-g/${g}/${k}">${ic(i)}${t}</a>`).join('')}`;
  document.body.appendChild(mn);
  const r=mn.getBoundingClientRect();mn.style.left=Math.max(8,Math.min(x,innerWidth-r.width-8))+'px';mn.style.top=Math.max(8,Math.min(y,innerHeight-r.height-8))+'px';
  setTimeout(()=>document.addEventListener('click',function c(e){if(!e.target.closest('.menu-g'))mn.remove();document.removeEventListener('click',c)},{once:false}),0);
@@ -1139,13 +1175,14 @@ function activarMenuGrupos(){
 function pintarProf(r){
  const [base,g,tab]=r.split('/');
  if(base==='prof-g'&&grupoDe(g)){
-  const t=['lista','tareas','mensajes','calif'].includes(tab)?tab:'lista';
-  marco(`prof-g/${g}`,`Grupo ${g}`,grupoHTML(g,t));
-  if(t==='lista')pintarListaG(g,ultimaClase());
+  const t=tabsGrupo(g).some(x=>x[0]===tab)?tab:'lista';
+  marco(`prof-g/${g}`,nomGrupo(g),grupoHTML(g,t));
+  if(t==='lista')pintarListaG(g,ultimaClase(g));
+  if(t==='notas')PERSISTIR.notas?.(g,document.getElementById('gp'));
   if(t==='tareas')pintarTareasG(g);
   if(t==='mensajes')pintarMensajesG(g);
   if(t==='calif')pintarCalifG(g);
-  document.title=`Grupo ${g} · miescuela.com`;return;
+  document.title=`${nomGrupo(g)} · miescuela.com`;return;
  }
  if(r==='prof-grupos'){marco(r,'Mis grupos',profGruposHTML());activarMenuGrupos();document.title='Mis grupos · miescuela.com';return}
  marco('prof-horario','Mi horario',profHorarioHTML());activarMenuGrupos();document.title='Mi horario · miescuela.com';
@@ -1268,6 +1305,7 @@ function pintarKardex(ciclo){
 function pintar(){
  let r=(location.hash||'').slice(1)||(typeof conCuentas==='function'&&conCuentas()?'entrar':'inicio');
  if(r==='entrar'||r==='salir-c'||r==='c'||r.startsWith('c/'))return window.pintarConectado?pintarConectado(r):null;
+ if(REAL&&window.guardaReal){const r2=guardaReal(r);if(r2!==r){location.hash='#'+r2;return}}
  if(GRAB.rec){GRAB.cancelar=true;GRAB.rec.stop()}
  VISOR.cerrar();document.querySelector('.menu-g')?.remove();document.querySelectorAll('.visor-fondo').forEach(x=>x.remove());
  if(r.startsWith('prof-'))return pintarProf(r);
@@ -1277,8 +1315,8 @@ function pintar(){
  if(def[0]==='kardex'){pintarKardex(actual.ciclo);document.getElementById('tk').onclick=e=>{const b=e.target.closest('button');if(b)pintarKardex(b.dataset.c)}}
  if(def[0]==='actividades'){pintarTareas('pendiente');
   document.getElementById('tt').onclick=e=>{const b=e.target.closest('button');if(b)pintarTareas(b.dataset.f)};
-  document.getElementById('tl').onchange=e=>{const i=e.target.closest('input[type=file]');if(!i||!i.files[0])return;const t=TAREAS.find(x=>x.id==i.dataset.t);t.archivo=i.files[0].name;t.blob=i.files[0];t.estado='entregada';{const tg=tareaProfDe(t.id);if(tg)tg.entregas[ALUMNO.matricula]={archivo:t.archivo,blob:t.blob,fecha:ahoraTxt()}}pintarTareas('pendiente');alert('Listo: "'+t.archivo+'" se entregó a '+profDe(t.cl)+'.')};
-  document.getElementById('tl').onclick=e=>{const q=e.target.closest('[data-quitar]');if(q){const t=TAREAS.find(x=>x.id==q.dataset.quitar);t.estado='pendiente';t.archivo=null;t.blob=null;{const tg=tareaProfDe(t.id);if(tg)delete tg.entregas[ALUMNO.matricula]}pintarTareas('pendiente')}const v=e.target.closest('[data-ver]');if(v){const t=TAREAS.find(x=>x.id==v.dataset.ver);VISOR.abrir({nombre:t.archivo,blob:t.blob})}const h=e.target.closest('[data-hablar]');if(h)chatSel=h.dataset.hablar}}
+  document.getElementById('tl').onchange=e=>{const i=e.target.closest('input[type=file]');if(!i||!i.files[0])return;const t=TAREAS.find(x=>x.id==i.dataset.t);if(PERSISTIR.entregaAlumno){const f=i.files[0];if(f.size>25*1048576)return alert('El archivo pesa más de 25 MB.');PERSISTIR.entregaAlumno(t,f).then(()=>{t.archivo=f.name;t.blob=f;t.estado='entregada';pintarTareas('pendiente');alert('Listo: "'+f.name+'" se entregó a '+profDe(t.cl)+'.')},x=>alert('No se pudo entregar: '+x.message));return}t.archivo=i.files[0].name;t.blob=i.files[0];t.estado='entregada';{const tg=tareaProfDe(t.id);if(tg)tg.entregas[ALUMNO.matricula]={archivo:t.archivo,blob:t.blob,fecha:ahoraTxt()}}pintarTareas('pendiente');alert('Listo: "'+t.archivo+'" se entregó a '+profDe(t.cl)+'.')};
+  document.getElementById('tl').onclick=e=>{const q=e.target.closest('[data-quitar]');if(q){const t=TAREAS.find(x=>x.id==q.dataset.quitar);t.estado='pendiente';t.archivo=null;t.blob=null;{const tg=tareaProfDe(t.id);if(tg)delete tg.entregas[ALUMNO.matricula]}pintarTareas('pendiente')}const v=e.target.closest('[data-ver]');if(v){const t=TAREAS.find(x=>x.id==v.dataset.ver);if(t.blob)VISOR.abrir({nombre:t.archivo,blob:t.blob});else PERSISTIR.url?.('entregas',t.ruta).then(u=>VISOR.abrir({nombre:t.archivo,url:u}),x=>alert(x.message))}const h=e.target.closest('[data-hablar]');if(h)chatSel=h.dataset.hablar}}
  if(def[0]==='mensajes'){pintarMensajes();document.getElementById('cc').onclick=e=>{const it=e.target.closest('[data-cl]');if(it){chatSel=it.dataset.cl;pintarMensajes()}}}
  if(def[0]==='horario'){pintarHorario(bloqueActual().nombre);document.getElementById('hb').onclick=e=>{const b=e.target.closest('button');if(b)pintarHorario(b.dataset.b)}}
  document.title=def[1]+' · miescuela.com';
@@ -1296,9 +1334,11 @@ function revelar(){
 }
 addEventListener('hashchange',pintar);
 // Se pinta cuando ya cargaron config.js y conectado.js
-if(document.readyState==='loading')addEventListener('DOMContentLoaded',pintar);else pintar();
+const arranque=()=>window.arrancar?arrancar():pintar();
+if(document.readyState==='loading')addEventListener('DOMContentLoaded',arranque);else arranque();
 </script>
 <script src="config.js"></script>
 <script src="conectado.js"></script>
+<script src="real.js"></script>
 </body>
 </html>

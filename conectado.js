@@ -65,6 +65,8 @@ function crearDBReal() {
     async url(b, ruta) { const k = b + '/' + ruta, x = URLS.get(k); if (x && x.vence > Date.now() + 300000) return x.url;
       const c = await SB.iniciar(); const {data, error} = await c.storage.from(b).createSignedUrl(ruta, 3600); if (error) throw error; URLS.set(k, {url: data.signedUrl, vence: Date.now() + 3600000}); return data.signedUrl; },
     // ¿Ya se corrió supabase.sql? Devuelve cuántas cuentas hay, o null si la base está vacía.
+    async rpc(nombre, args = {}) { const c = await SB.iniciar(); const {data, error} = await c.rpc(nombre, args); if (error) throw error; return data; },
+    async cambiarContrasena(nueva) { const c = await SB.iniciar(); const {error} = await c.auth.updateUser({password: nueva}); if (error) throw error; },
     async diagnostico() { const c = await SB.iniciar(); const {data, error} = await c.rpc('estado_demo'); return error ? null : data; }
   };
 }
@@ -140,18 +142,18 @@ function navDe(yo) {
   if (yo.rol === 'alumno') return [['c/inicio', 'Inicio', 'inicio'], ['c/tareas', yo.nivel === 'primaria' ? 'Mis tareas' : 'Tareas', 'act'], ...(yo.nivel === 'primaria' ? [] : [['c/mensajes', 'Mensajes', 'msg']])];
   if (yo.rol === 'padre') return [['c/hijo', 'Resumen', 'inicio'], ['c/hijo/mensajes', 'Mensajes', 'msg']];
   if (yo.rol === 'profesor') return [['c/grupos', 'Mis grupos', 'perfil'], ...(C.cache.misGrupos || []).map(g => [`c/g/${g.id}/lista`, g.nombre + (g.materia.startsWith('Grupo') ? '' : ' · ' + g.materia), 'lista'])];
-  return [['c/admin', 'Resumen', 'tray'], ['c/admin/alumnos', 'Alumnos', 'perfil'], ['c/admin/grupos', 'Grupos', 'lista'], ['c/admin/calendario', 'Calendario escolar', 'cal'], ['c/admin/pagos', 'Pagos', 'pagos'], ['c/admin/avisos', 'Avisos', 'msg'], ['c/admin/profesores', 'Profesores', 'lista']];
+  return [['c/admin', 'Resumen', 'tray'], ['c/admin/alumnos', 'Alumnos', 'perfil'], ['c/admin/grupos', 'Grupos', 'lista'], ['c/admin/accesos', 'Accesos', 'candado'], ['c/admin/calendario', 'Calendario escolar', 'cal'], ['c/admin/pagos', 'Pagos', 'pagos'], ['c/admin/avisos', 'Avisos', 'msg'], ['c/admin/profesores', 'Profesores', 'lista']];
 }
 function marcoC(ruta, titulo, html) {
   const yo = C.yo, nav = navDe(yo), clase = {profesor: 'prof', padre: 'padre', admin: 'admin', alumno: ''}[yo.rol];
   const activo = k => k === ruta || (ruta.startsWith('c/g/') && k.startsWith(ruta.split('/').slice(0, 3).join('/') + '/')) || (k === 'c/hijo' && ruta === 'c/hijo');
   const rolTxt = {alumno: `${NIVELES[yo.nivel] || ''} · ${yo.grado || ''}`, padre: yo.grado || 'Familia', profesor: `Profesor · ${NIVELES[yo.nivel] || ''}`, admin: 'Administración'}[yo.rol];
-  const inf = yo.rol === 'admin' ? [nav[0], nav[2], nav[4]] : nav.slice(0, 3);
+  const inf = yo.rol === 'admin' ? [nav[0], nav[2], nav[3]] : nav.slice(0, 3);
   document.getElementById('raiz').innerHTML = `
   <div class="app ${clase}">
    <aside class="lateral"><div class="logo"><b>me</b><span>miescuela.com</span></div>
     <nav class="nav"><div class="grupo">${{alumno: 'Escolar', padre: 'Familia', profesor: 'Docencia', admin: 'Administración'}[yo.rol]}</div>${nav.map(([k, t, i]) => `<a href="#${k}" class="${activo(k) ? 'activo' : ''}">${ic(i)}${esc(t)}</a>`).join('')}</nav>
-    <a class="modo" href="#salir-c">${ic('salir')}Salir</a></aside>
+    <a class="modo" href="#c/contrasena" style="border-style:solid;color:var(--gris)">${ic('candado')}Cambiar contraseña</a><a class="modo" href="#salir-c">${ic('salir')}Salir</a></aside>
    <div class="cuerpo">
     <header class="barra"><h1>${esc(titulo)}</h1><span class="yo"><span class="avatar">${iniciales(yo.nombre)}</span><span class="nom" style="font-size:14px;font-weight:600">${esc(yo.nombre)} · ${esc(rolTxt)}</span></span></header>
     <main>${html}</main>
@@ -176,7 +178,7 @@ async function pintarConectado(r) {
     if (yo.rol === 'alumno') { if (r === 'c/tareas') return await vAlumnoTareas(); if (r === 'c/mensajes' && yo.nivel !== 'primaria') return await vMensajes('c/mensajes'); return await vAlumnoInicio(); }
     if (yo.rol === 'padre') { if (r === 'c/hijo/mensajes') return await vMensajes('c/hijo/mensajes'); return await vPadre(); }
     if (yo.rol === 'profesor') { if (p[1] === 'g' && C.cache.misGrupos.some(g => g.id === p[2])) return await vGrupo(p[2], p[3] || 'lista'); return await vProfGrupos(); }
-    if (yo.rol === 'admin') { if (r === 'c/admin/alumnos') return await vAdminAlumnos(); if (r === 'c/admin/profesores') return await vAdminProfesores(); if (r === 'c/admin/avisos') return await vAdminAvisos(); if (r === 'c/admin/calendario') return await vAdminCalendario(); if (r === 'c/admin/grupos') return await vAdminGrupos(); if (r === 'c/admin/pagos') return await vAdminPagos(); return await vAdmin(); }
+    if (yo.rol === 'admin') { if (r === 'c/admin/alumnos') return await vAdminAlumnos(); if (r === 'c/admin/profesores') return await vAdminProfesores(); if (r === 'c/admin/avisos') return await vAdminAvisos(); if (r === 'c/admin/calendario') return await vAdminCalendario(); if (r === 'c/admin/grupos') return await vAdminGrupos(); if (r === 'c/admin/accesos') return await vAdminAccesos(); if (r === 'c/admin/pagos') return await vAdminPagos(); return await vAdmin(); }
   } catch (e) { marcoC(r, 'Error', fallo(e)); }
 }
 window.pintarConectado = pintarConectado;
@@ -252,7 +254,7 @@ async function contactosDe(yo, grupoProf) {
     return [{id: 'grupo:' + grupoProf, nombre: 'Todo el grupo', sub: `Aviso para ${ins.length} alumnos y sus familias`}, ...papas, ...conCuenta];
   }
   let alumnoId = yo.id;
-  if (yo.rol === 'padre') { const t = await db().leer('tutores', {padre_id: yo.id}); alumnoId = t[0]?.alumno_id; }
+  if (yo.rol === 'padre') { const t = await db().leer('tutores', {padre_id: yo.id}); alumnoId = (typeof REAL !== 'undefined' && REAL?.alumnoId) || t[0]?.alumno_id; }
   const ins = await db().leer('inscripciones', {alumno_id: alumnoId}), grupos = await db().leer('grupos', {id: ins.map(i => i.grupo_id)});
   const profes = porId(await db().leer('personas', {id: grupos.map(g => g.profesor_id).filter(Boolean)}));
   const admins = await db().leer('personas', {rol: 'admin'});
@@ -273,7 +275,7 @@ async function burbujaC(m, yo) {
       : /^audio\//.test(tipo) ? `<div class="adj-audio">${/^Nota de voz/.test(m.adjunto_nombre) ? '<small style="margin:0 0 4px;font-weight:700">Nota de voz</small>' : ''}<audio controls preload="metadata" src="${url}"></audio></div>`
       : `<button type="button" class="adj-arch" data-adj-url="${esc(url)}" data-n="${esc(m.adjunto_nombre)}">${ic('docs')}<span><b>${esc(m.adjunto_nombre)}</b><small>ver sin descargar</small></span></button>`;
   }
-  return `<div class="burbuja ${m.de === yo.id ? 'mia' : ''}">${m.grupo_id && !m.para ? '<small style="font-weight:700;margin:0 0 2px">Para todo el grupo</small>' : m.tarea_id ? '<small style="font-weight:700;margin:0 0 2px">Comentario en una tarea</small>' : ''}${adj}${m.texto ? esc(m.texto) : ''}<small>${hora(m.creado_en)}</small></div>`;
+  return `<div class="burbuja ${m.de === yo.id ? 'mia' : ''}">${m.grupo_id && !m.para ? '<small style="font-weight:700;margin:0 0 2px">Para todo el grupo</small>' : m.tarea_id ? '<small style="font-weight:700;margin:0 0 2px">Comentario en una tarea</small>' : m.sobre_alumno && window.NOMBRES?.[m.sobre_alumno] ? `<small style="font-weight:700;margin:0 0 2px">Sobre ${esc(window.NOMBRES[m.sobre_alumno].split(' ')[0])}</small>` : ''}${adj}${m.texto ? esc(m.texto) : ''}<small>${hora(m.creado_en)}</small></div>`;
 }
 async function vMensajes(ruta, grupoProf, cont) {
   const yo = C.yo, propio = !!cont;
@@ -301,6 +303,7 @@ async function vMensajes(ruta, grupoProf, cont) {
     if (c.id.startsWith('grupo:')) fila.grupo_id = c.id.slice(6); else fila.para = c.id;
     try {
       if (adj) { const {ruta, archivo} = await ARCHIVOS.guardar('adjuntos', yo.id, adj.blob instanceof File ? adj.blob : new File([adj.blob], adj.nombre, {type: adj.blob.type})); Object.assign(fila, {adjunto_ruta: ruta, adjunto_nombre: archivo.name === adj.nombre || !/\.webp$/.test(archivo.name) ? adj.nombre : adj.nombre.replace(/\.\w+$/, '') + '.webp', adjunto_tipo: archivo.type || ''}); }
+      if (yo.rol === 'padre' && typeof REAL !== 'undefined' && REAL?.alumnoId) fila.sobre_alumno = REAL.alumnoId;
       await db().insertar('mensajes', [fila]); recargar();
     } catch (x) { alert('No se pudo enviar: ' + x.message); }
   });
@@ -467,7 +470,9 @@ async function vAdminAlumnos() {
     main().innerHTML = `
      <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><input id="aq" placeholder="Buscar por nombre o matrícula" value="${esc(filtroAdmin.q)}" style="flex:1;min-width:200px"><button class="btn" id="aalta" style="padding:10px 14px;font-size:13px">+ Dar de alta</button></div>
       <div class="tabs" id="anv">${[['', 'Todos'], ...Object.entries(NIVELES)].map(([k, t]) => `<button data-n="${k}" class="suave ${filtroAdmin.nivel === k ? 'activo' : ''}">${t} (${k ? alumnos.filter(a => a.nivel === k).length : alumnos.length})</button>`).join('')}</div>
-      <form id="afalta" class="oculto" style="display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--linea);padding-top:12px"><div class="form"><label>Nombre completo<input id="an" required></label><label>Nivel<select id="anl">${Object.entries(NIVELES).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></label><label>Grado<input id="ag" placeholder="Ej. 2.º de secundaria"></label><label>Grupo<select id="agr"></select></label><label>Matrícula<input id="am" placeholder="Opcional"></label></div><button class="btn" type="submit">Guardar alumno</button><span style="font-size:12px;color:var(--gris)">La cuenta para entrar (correo y contraseña) se crea aparte; aquí solo se da de alta el expediente.</span></form>
+      <form id="afalta" class="oculto" style="display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--linea);padding-top:12px"><div class="form"><label>Nombre completo<input id="an" required></label><label>Nivel<select id="anl">${Object.entries(NIVELES).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></label><label>Grado<input id="ag" placeholder="Ej. 2.º de secundaria"></label><label>Grupo<select id="agr"></select></label><label>Matrícula<input id="am" placeholder="Opcional"></label></div><button class="btn" type="submit">Guardar alumno</button><span style="font-size:12px;color:var(--gris)">La cuenta para entrar (correo y contraseña) se crea aparte; aquí solo se da de alta el expediente.</span><b style="font-size:13px;margin-top:4px">Mamá, papá o tutor</b><div class="form"><label>Nombre<input id="atn" placeholder="Ej. Laura Ríos Peña"></label><label>Parentesco<select id="atp"><option>Mamá</option><option>Papá</option><option>Tutor</option></select></label></div>
+       <div class="form"><label>Correo<input id="atc" type="email" placeholder="Para restablecer su contraseña si la olvida"></label><label>Teléfono<input id="att" placeholder="Opcional"></label></div>
+       <span style="font-size:12px;color:var(--gris)">Si la familia ya tiene otro hijo en la escuela, escribe el mismo nombre o correo: se liga a la misma cuenta.</span></form>
       <div style="overflow-x:auto"><table><thead><tr><th>Alumno</th><th>Nivel</th><th class="ocultar-movil">Grupo</th><th class="num">Asistencia</th><th class="num ocultar-movil">Cuenta</th></tr></thead><tbody>${ver.map(a => `<tr><td>${esc(a.nombre)}${a.estado && a.estado !== 'activo' ? ` <span class="chip ${a.estado === 'baja' ? 'mal' : 'aviso'}">${a.estado === 'baja' ? 'Baja' : 'Transferido'}</span>` : ''}<br><span style="font-size:12px;color:var(--gris)">${esc(a.usuario || '')} · ${esc(a.grado || '')}</span></td><td>${NIVELES[a.nivel] || ''}</td><td class="ocultar-movil">${d.ins.filter(i => i.alumno_id === a.id).map(i => esc(d.grupos.find(g => g.id === i.grupo_id)?.nombre || i.grupo_id)).join(', ')}</td><td class="num">${asis(a.id) ?? '—'}${asis(a.id) != null ? ' %' : ''}</td><td class="num ocultar-movil">${a.auth_id ? '<span class="chip ok">Sí</span>' : '<span class="chip">No</span>'}</td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Nadie coincide.</td></tr>'}</tbody></table></div></section>`;
     const sel = () => { const n = main().querySelector('#anl').value; main().querySelector('#agr').innerHTML = '<option value="">Sin grupo</option>' + d.grupos.filter(g => g.nivel === n).map(g => `<option value="${g.id}">${esc(g.nombre)} · ${esc(g.materia)}</option>`).join(''); };
     sel(); main().querySelector('#anl').onchange = sel;
@@ -475,8 +480,12 @@ async function vAdminAlumnos() {
     main().onclick = e => { const b = e.target.closest('#anv button'); if (b) { filtroAdmin.nivel = b.dataset.n; pinta(); } if (e.target.id === 'aalta') main().querySelector('#afalta').classList.toggle('oculto'); };
     main().querySelector('#afalta').onsubmit = async e => { e.preventDefault(); const f = e.target;
       try { const [p] = await db().insertar('personas', [{rol: 'alumno', nombre: f.querySelector('#an').value.trim(), nivel: f.querySelector('#anl').value, grado: f.querySelector('#ag').value.trim() || null, usuario: f.querySelector('#am').value.trim() || null}]);
-        if (f.querySelector('#agr').value) await db().insertar('inscripciones', [{grupo_id: f.querySelector('#agr').value, alumno_id: p.id}]);
-        alert(`${p.nombre} quedó dado de alta.`); vAdminAlumnos(); } catch (x) { alert('No se pudo guardar: ' + x.message); } };
+        if (f.querySelector('#agr').value) { const g0 = d.grupos.find(g => g.id === f.querySelector('#agr').value); await db().insertar('inscripciones', d.grupos.filter(g => g.nivel === g0.nivel && g.nombre === g0.nombre).map(g => ({grupo_id: g.id, alumno_id: p.id}))); }
+        const tn = f.querySelector('#atn').value.trim(), tc = f.querySelector('#atc').value.trim().toLowerCase();
+        if (tn || tc) { let papa = d.personas.find(x => x.rol === 'padre' && ((tc && (x.correo || '').toLowerCase() === tc) || (tn && x.nombre.toLowerCase() === tn.toLowerCase())));
+          if (!papa) [papa] = await db().insertar('personas', [{rol: 'padre', nombre: tn || tc, correo: tc || null, telefono: f.querySelector('#att').value.trim() || null, grado: 'Familia de ' + p.nombre.split(' ')[0]}]);
+          await db().insertar('tutores', [{padre_id: papa.id, alumno_id: p.id, parentesco: f.querySelector('#atp').value}]); }
+        estAccesos.q = p.nombre; location.hash = '#c/admin/accesos'; } catch (x) { alert('No se pudo guardar: ' + x.message); } };
   };
   pinta();
 }
@@ -841,4 +850,75 @@ async function importar(p, btn) {
     const resumen = `Listo: ${p.grupos.length} materias y ${p.alumnos.length} alumnos revisados.`;
     estGrupos.plan = null; alert(resumen); vAdminGrupos();
   } catch (x) { msg(''); alert('La importación se detuvo: ' + x.message + '\nLo que ya se guardó se queda; puedes volver a subir el archivo y solo se aplicará lo que falte.'); btn.disabled = false; }
+}
+
+// =====================================================================
+// Administración: accesos. La escuela crea las cuentas; la contraseña se genera sola,
+// se imprime una sola vez y nadie (ni control escolar) la puede volver a ver.
+// =====================================================================
+let estAccesos = {q: '', abierto: null};
+function familias(personas, tutores) {
+  const P = porId(personas), grupo = {}, raiz = x => grupo[x] === x || grupo[x] == null ? (grupo[x] = x) : (grupo[x] = raiz(grupo[x]));
+  for (const t of tutores) if (P[t.padre_id] && P[t.alumno_id]) { const a = raiz(t.padre_id), b = raiz(t.alumno_id); if (a !== b) grupo[a] = b; }
+  const fams = {};
+  for (const p of personas.filter(p => p.rol === 'alumno' || p.rol === 'padre')) (fams[raiz(p.id)] ??= []).push(p);
+  return Object.values(fams).map(m => ({hijos: m.filter(p => p.rol === 'alumno').sort((a, b) => a.nombre.localeCompare(b.nombre)), papas: m.filter(p => p.rol === 'padre')})).filter(f => f.hijos.length);
+}
+function hojaAccesos(items, titulo) {
+  document.querySelector('.hoja-acc-fondo')?.remove();
+  const url = location.origin + location.pathname;
+  const d = document.createElement('div'); d.className = 'hoja-acc-fondo';
+  d.innerHTML = `<div class="hoja-acc"><div class="no-imprimir fila" style="gap:8px;flex-wrap:wrap"><span style="font-size:13px;color:var(--mal);font-weight:600">${ic('candado', 'style="width:14px;height:14px;vertical-align:-2px"')} Las contraseñas solo se ven ahora. Imprímelas o anótalas antes de cerrar.</span><div style="display:flex;gap:8px"><button class="btn" id="hprint">Imprimir</button><button class="btn sec" id="hcerrar">Cerrar</button></div></div>
+    <div class="hoja-papel"><div class="fila"><div class="logo" style="display:flex;gap:10px;align-items:center"><b style="width:38px;height:38px;border-radius:10px;background:var(--marca);color:#fff;display:grid;place-items:center">me</b><span style="font-weight:700">miescuela.com</span></div><span style="font-size:12px;color:var(--gris)">${new Date().toLocaleDateString('es-MX', {day: 'numeric', month: 'long', year: 'numeric'})}</span></div>
+     <h2 style="margin:14px 0 2px">${esc(titulo)}</h2><p style="margin:0 0 14px;font-size:13px;color:var(--gris)">Entra en <b>${esc(url)}</b> con tu usuario y contraseña. La primera vez te pediremos crear tu propia contraseña. Documento confidencial: guárdalo en un lugar seguro.</p>
+     ${items.map(x => `<div class="cred"><div><b>${esc(x.nombre)}</b><span>${esc(x.que)}</span></div>${x.contrasena ? `<div class="cv"><small>Usuario</small><code>${esc(x.usuario)}</code></div><div class="cv"><small>Contraseña</small><code>${esc(x.contrasena)}</code></div>` : `<div class="cv" style="grid-column:span 2"><small>Acceso</small><span>${esc(x.nota || 'Ya tiene acceso; usa la contraseña que creó.')}</span></div>`}</div>`).join('')}
+     <p style="font-size:12px;color:var(--gris);margin:14px 0 0">¿Olvidaste tu contraseña? Pídela en control escolar. Para restablecerla te pedirán el correo que registraste en la inscripción. Control escolar no puede ver tu contraseña.</p></div></div>`;
+  document.body.appendChild(d);
+  d.querySelector('#hprint').onclick = () => print();
+  d.querySelector('#hcerrar').onclick = () => { if (confirm('Al cerrar ya no se podrán volver a ver estas contraseñas. ¿Ya las imprimiste o anotaste?')) d.remove(); };
+}
+const ROL_TXT = {alumno: 'Alumno', padre: 'Familia', profesor: 'Profesor'};
+async function vAdminAccesos() {
+  marcoC('c/admin/accesos', 'Accesos', cargando());
+  const [personas, tutores, log, grupos, ins] = await Promise.all([db().leer('personas', {rol: ['alumno', 'padre', 'profesor']}, {orden: 'nombre'}), db().leer('tutores'), db().leer('accesos_log', {}, {orden: 'fecha', desc: true, limite: 40}), db().leer('grupos'), db().leer('inscripciones')]);
+  const P = porId(personas), st = estAccesos, q = normal(st.q);
+  const salon = a => { const g = grupos.find(x => ins.some(i => i.alumno_id === a.id && i.grupo_id === x.id)); return g ? g.nombre : 'Sin grupo'; };
+  const chipAcc = p => !p.auth_id ? '<span class="chip">Sin acceso</span>' : p.debe_cambiar ? '<span class="chip aviso">Debe crear su contraseña</span>' : '<span class="chip ok">Con acceso</span>';
+  const parentesco = (papa, hijo) => tutores.find(t => t.padre_id === papa.id && t.alumno_id === hijo.id)?.parentesco || 'Tutor';
+  const fams = familias(personas.filter(p => p.rol !== 'profesor'), tutores).filter(f => !q || [...f.hijos, ...f.papas].some(p => normal(p.nombre + ' ' + (p.usuario || '') + ' ' + (p.correo || '')).includes(q)));
+  const profes = personas.filter(p => p.rol === 'profesor' && (!q || normal(p.nombre + ' ' + (p.usuario || '') + ' ' + (p.correo || '')).includes(q)));
+  const filaP = (p, que) => `<div class="it" style="flex-wrap:wrap;padding:8px 0"><div class="t" style="min-width:200px"><b>${esc(p.nombre)}</b><span>${esc(que)}${p.usuario ? ' · usuario ' + esc(p.usuario) : ''}${p.correo ? ' · ' + esc(p.correo) : ''}</span></div>${chipAcc(p)}
+    ${p.auth_id ? `<button class="btn sec" data-rest="${p.id}" style="padding:7px 12px;font-size:13px">Restablecer contraseña</button>` : ''}
+    ${estAccesos.abierto === p.id ? `<form data-restf="${p.id}" style="display:flex;gap:8px;flex-wrap:wrap;width:100%;background:var(--fondo);border-radius:12px;padding:10px;align-items:flex-end"><label style="flex:1;min-width:220px">Correo registrado (lo dice quien lo pide)<input name="correo" type="email" required placeholder="correo@ejemplo.com"></label><button class="btn" type="submit" style="padding:9px 14px;font-size:13px">Confirmar y generar nueva</button><span style="font-size:12px;color:var(--gris);width:100%">Solo se restablece si el correo coincide con el que la escuela tiene registrado${p.rol === 'alumno' ? ' (el suyo o el de su mamá o papá)' : ''}. Queda en el registro y se le avisa por mensaje.</span></form>` : ''}</div>`;
+  main().innerHTML = `
+   <section class="tarjeta"><div class="fila" style="flex-wrap:wrap"><div><h2>Accesos a la plataforma</h2><span style="font-size:13px;color:var(--gris)">La escuela crea las cuentas. La contraseña se genera sola y <b>solo se ve una vez</b>, en la hoja que se imprime para la familia. Control escolar nunca puede ver contraseñas: solo restablecerlas confirmando el correo registrado, y cada cambio queda en el registro.</span></div></div>
+    <input id="acq" placeholder="Buscar alumno, familia, profesor, usuario o correo" value="${esc(st.q)}"></section>
+   <section class="tarjeta"><div class="fila"><h2>Familias</h2><span class="chip">${fams.length}</span></div><div class="lista">${fams.slice(0, 40).map(f => { const falta = [...f.hijos, ...f.papas].filter(p => !p.auth_id).length; const clave = f.hijos[0].id;
+      return `<div class="familia"><div class="fila" style="flex-wrap:wrap;gap:8px"><div><b>${f.papas.length ? esc(f.papas.map(p => p.nombre).join(' y ')) : esc(f.hijos[0].nombre)}</b><span style="display:block;font-size:13px;color:var(--gris)">${f.hijos.length > 1 ? f.hijos.length + ' hijos en la escuela' : '1 hijo en la escuela'}</span></div>
+        <button class="btn ${falta ? '' : 'sec'}" data-hoja="${clave}" style="padding:8px 12px;font-size:13px">${falta ? `Crear ${falta === 1 ? 'acceso' : falta + ' accesos'} e imprimir hoja` : 'Ver hoja de la familia'}</button></div>
+        ${f.hijos.map(h => filaP(h, `Alumno · ${NIVELES[h.nivel] || ''} · ${salon(h)}`)).join('')}${f.papas.map(p => filaP(p, `${parentesco(p, f.hijos.find(h => tutores.some(t => t.padre_id === p.id && t.alumno_id === h.id)) || f.hijos[0])} de ${f.hijos.filter(h => tutores.some(t => t.padre_id === p.id && t.alumno_id === h.id)).map(h => h.nombre.split(' ')[0]).join(' y ')}`)).join('')}</div>`; }).join('') || '<div class="vacio">Sin resultados.</div>'}
+    ${fams.length > 40 ? `<span style="font-size:13px;color:var(--gris)">Se muestran 40 de ${fams.length}. Busca para encontrar a una familia.</span>` : ''}</div></section>
+   <section class="tarjeta"><h2>Profesores</h2><div class="lista">${profes.map(p => `<div class="familia"><div class="fila" style="flex-wrap:wrap;gap:8px">${filaP(p, 'Profesor · ' + (p.grado || ''))}${p.auth_id ? '' : `<button class="btn" data-hojap="${p.id}" style="padding:8px 12px;font-size:13px">Crear acceso e imprimir</button>`}</div></div>`).join('') || '<div class="vacio">Sin resultados.</div>'}</div></section>
+   <section class="tarjeta"><h2>Registro de accesos</h2><span style="font-size:13px;color:var(--gris)">Quién creó o restableció cada cuenta. Cada persona ve también el suyo.</span><div class="lista">${log.map(l => `<div class="it" style="padding:7px 0"><span class="chip ${l.accion === 'restablecido' ? 'aviso' : l.accion === 'cambiada' ? 'ok' : ''}" style="white-space:nowrap">${{creado: 'Acceso creado', restablecido: 'Restablecida', cambiada: 'La cambió su dueño'}[l.accion]}</span><div class="t"><b>${esc(P[l.persona_id]?.nombre || 'Persona')}</b><span>${l.hecho_por && l.hecho_por !== l.persona_id ? 'por ' + esc(P[l.hecho_por]?.nombre || 'control escolar') + ' · ' : ''}${l.detalle ? esc(l.detalle) + ' · ' : ''}${hora(l.fecha)}</span></div></div>`).join('') || '<div class="vacio">Sin movimientos.</div>'}</div></section>`;
+  const q2 = main().querySelector('#acq'); q2.oninput = () => { clearTimeout(q2._t); q2._t = setTimeout(async () => { st.q = q2.value; const p = q2.selectionStart; await vAdminAccesos(); const q3 = main().querySelector('#acq'); q3.focus(); q3.setSelectionRange(p, p); }, 250); };
+  const crearYHoja = async (lista, titulo) => {
+    const items = [];
+    for (const p of lista) {
+      const hijosDe = tutores.filter(t => t.padre_id === p.id).map(t => P[t.alumno_id]).filter(Boolean);
+      const que = p.rol === 'alumno' ? `Alumno · ${NIVELES[p.nivel] || ''} · ${salon(p)}` : p.rol === 'padre' ? `${hijosDe.length ? parentesco(p, hijosDe[0]) + ' de ' + hijosDe.map(h => h.nombre.split(' ')[0]).join(' y ') : 'Mamá, papá o tutor'}` : 'Profesor';
+      if (p.auth_id) { items.push({nombre: p.nombre, que, nota: `Ya tiene acceso (usuario ${p.usuario}). Si olvidó su contraseña, restablécela.`}); continue; }
+      const r = await db().rpc('crear_acceso', {p_persona: p.id}); items.push({nombre: p.nombre, que, usuario: r.usuario, contrasena: r.contrasena});
+    }
+    await vAdminAccesos(); hojaAccesos(items, titulo);
+  };
+  main().onclick = async e => {
+    const h = e.target.closest('[data-hoja]'); if (h) { const f = fams.find(x => x.hijos[0].id === h.dataset.hoja); h.disabled = true;
+      try { await crearYHoja([...f.hijos, ...f.papas], f.papas.length ? 'Accesos de la familia ' + f.papas[0].nombre.split(' ').slice(1, 2).join(' ') : 'Acceso de ' + f.hijos[0].nombre); } catch (x) { alert('No se pudo: ' + x.message); h.disabled = false; } return; }
+    const hp = e.target.closest('[data-hojap]'); if (hp) { hp.disabled = true; try { await crearYHoja([P[hp.dataset.hojap]], 'Acceso de ' + P[hp.dataset.hojap].nombre); } catch (x) { alert('No se pudo: ' + x.message); hp.disabled = false; } return; }
+    const r = e.target.closest('[data-rest]'); if (r) { st.abierto = st.abierto === r.dataset.rest ? null : r.dataset.rest; const y = scrollY; await vAdminAccesos(); scrollTo(0, y); main().querySelector(`[data-restf="${r.dataset.rest}"] input`)?.focus(); }
+  };
+  main().onsubmit = async e => { const f = e.target.closest('[data-restf]'); if (!f) return; e.preventDefault(); const p = P[f.dataset.restf], b = f.querySelector('button'); b.disabled = true;
+    try { const r = await db().rpc('restablecer_acceso', {p_persona: p.id, p_correo: f.elements.correo.value}); st.abierto = null; await vAdminAccesos();
+      hojaAccesos([{nombre: p.nombre, que: ROL_TXT[p.rol] || '', usuario: r.usuario, contrasena: r.contrasena}], 'Nueva contraseña de ' + p.nombre); }
+    catch (x) { alert(x.message); b.disabled = false; } };
 }

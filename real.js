@@ -156,20 +156,54 @@ async function cargarAlumno(yo) {
 async function cargarPadre(yo) {
   const tut = await L('tutores', {padre_id: yo.id});
   if (!tut.length) throw new Error('No hay alumnos ligados a tu cuenta. Pide a control escolar que te vincule.');
-  const hijo = (await L('personas', {id: tut[0].alumno_id}))[0];
-  if (hijo.estado && hijo.estado !== 'activo') throw new Error(`${hijo.nombre.split(' ')[0]} aparece como dado de baja o transferido. Su expediente está disponible en control escolar.`);
-  REAL.hijo = hijo; REAL.parentesco = tut[0].parentesco;
+  const hijos = await L('personas', {id: tut.map(t => t.alumno_id)}, {orden: 'nombre'});
+  REAL.hijos = hijos.filter(h => !h.estado || h.estado === 'activo');
+  if (!REAL.hijos.length) throw new Error(`${hijos[0]?.nombre.split(' ')[0] || 'Tu hijo'} aparece como dado de baja o transferido. Su expediente está disponible en control escolar.`);
+  REAL.tutorDe = Object.fromEntries(tut.map(t => [t.alumno_id, t.parentesco]));
+  const [ins, pagos] = await Promise.all([L('inscripciones', {alumno_id: REAL.hijos.map(h => h.id)}), L('pagos', {alumno_id: REAL.hijos.map(h => h.id)}, {orden: 'vence'})]);
+  const gs = porId(await L('grupos', {id: [...new Set(ins.map(i => i.grupo_id))]}));
+  REAL.salonDe = Object.fromEntries(REAL.hijos.map(h => { const g = ins.filter(i => i.alumno_id === h.id).map(i => gs[i.grupo_id]).filter(Boolean); return [h.id, (g.find(x => !x.id.includes('-')) || g[0])?.nombre || 'Sin grupo']; }));
+  REAL.pagosFamilia = pagos;
+  window.NOMBRES = Object.fromEntries(REAL.hijos.map(h => [h.id, h.nombre]));
+  let sel = null; try { sel = sessionStorage.getItem('hijoSel'); } catch {}
+  await cargarHijo(yo, REAL.hijos.some(h => h.id === sel) ? sel : REAL.hijos[0].id);
+}
+// Carga todo lo de un hijo (horario, tareas, calificaciones, notas, pagos…) en las pantallas de papás.
+async function cargarHijo(yo, id) {
+  const hijo = REAL.hijos.find(h => h.id === id);
+  for (const o of [ALUMNOS_G, ASIST, PERDONADOS, TAREAS_G, EXAMENES, MSG_GRUPO, MSG_IND, HIST, PONDER, MANUAL]) vaciar(o);
+  Object.assign(REAL, {fechas: {}, faltas: {}, asisInfo: {}, hijo, parentesco: REAL.tutorDe[id]});
+  try { sessionStorage.setItem('hijoSel', id); } catch {}
   const grupos = await cargarDeAlumno(hijo);
   const [notas] = await Promise.all([L('anotaciones', {alumno_id: hijo.id}, {orden: 'creado_en', desc: true}), cargarComunes(yo, hijo.nivel, hijo.id)]);
   REAL.notas = notas;
   const base = grupos.find(g => !g.id.includes('-')) || grupos[0];
   const entrada = grupos.flatMap(g => (g.horario || []).map(h => h.inicio)).sort()[0] || '';
-  Object.assign(FAMILIA, {nombre: yo.nombre, iniciales: iniciales(yo.nombre), parentesco: tut[0].parentesco});
+  Object.assign(FAMILIA, {nombre: yo.nombre, iniciales: iniciales(yo.nombre), parentesco: REAL.parentesco});
   Object.assign(HIJA, {nombre: hijo.nombre, iniciales: iniciales(hijo.nombre), nivel: NIVELES[hijo.nivel], grado: hijo.grado || '', grupo: base?.nombre || '', tutor: REAL.profes[base?.profesor_id]?.nombre || '', entrada});
-  const kinder = hijo.nivel === 'kinder';
-  reemplazar(RUTAS_PADRES, [['padres', 'Resumen', 'inicio', 'Familia'], ['padres-horario', 'Horario de clases', 'reloj', 'Familia'], ['padres-escuela', kinder ? 'Actividades y notas' : 'Calificaciones y tareas', 'calif', 'Familia'], ['padres-mensajes', 'Mensajes', 'msg', 'Familia'],
+  const kinder = hijo.nivel === 'kinder', varios = REAL.hijos.length > 1;
+  reemplazar(RUTAS_PADRES, [...(varios ? [['padres-hijos', 'Mis hijos', 'perfil', 'Familia']] : []), ['padres', varios ? 'Resumen de ' + hijo.nombre.split(' ')[0] : 'Resumen', 'inicio', 'Familia'], ['padres-horario', 'Horario de clases', 'reloj', 'Familia'], ['padres-escuela', kinder ? 'Actividades y notas' : 'Calificaciones y tareas', 'calif', 'Familia'], ['padres-mensajes', 'Mensajes', 'msg', 'Familia'],
     ['padres-calendario', 'Calendario escolar', 'cal', 'Escuela'], ['padres-pagos', 'Colegiaturas', 'pagos', 'Escuela']]);
   REAL.rutas = RUTAS_PADRES.map(r => r[0]);
+}
+async function verHijo(id, ruta = 'padres') {
+  if (id !== REAL.alumnoId) {
+    const m = document.querySelector('main'); if (m) m.innerHTML = `<div class="vacio">${ic('reloj')}Cargando lo de ${esc(REAL.hijos.find(h => h.id === id).nombre.split(' ')[0])}…</div>`;
+    await cargarHijo(C.yo, id);
+  }
+  if (location.hash === '#' + ruta) pintar(); else location.hash = '#' + ruta;
+}
+const pendienteDe = id => REAL.pagosFamilia.filter(p => p.alumno_id === id && !p.pagado_en && deIso(p.vence) < hoy0()).reduce((a, p) => a + +p.monto, 0);
+function hijosReal() {
+  const total = REAL.hijos.reduce((a, h) => a + pendienteDe(h.id), 0);
+  return `<section class="hero portada" id="portada" style="background:linear-gradient(135deg,#0E6E8C,#0A4D63)"><span class="formas" aria-hidden="true"><i></i><i></i><i></i></span><p>Hola,</p><h2>${esc(C.yo.nombre.split(' ')[0])}</h2><p>${REAL.hijos.length} hijos en la escuela. Elige a quién quieres ver.</p></section>
+  ${avisosHTML()}
+  <div class="hijos">${REAL.hijos.map(h => { const deb = pendienteDe(h.id), act = h.id === REAL.alumnoId;
+    return `<a class="tarjeta hijo ${act ? 'actual' : ''}" href="#" data-ver-hijo="${h.id}"><div style="display:flex;gap:12px;align-items:center"><span class="avatar" style="width:48px;height:48px;font-size:16px;background:#0E6E8C">${iniciales(h.nombre)}</span><div class="t"><b style="font-size:17px">${esc(h.nombre)}</b><span style="font-size:13px;color:var(--gris);display:block">${NIVELES[h.nivel] || ''} · ${esc(REAL.salonDe[h.id])}</span></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${deb ? `<span class="chip mal">Debe ${pesos(deb)}</span>` : '<span class="chip ok">Colegiatura al corriente</span>'}${act ? '<span class="chip">Viendo ahora</span>' : ''}</div>
+      <span style="font-size:13px;font-weight:600;color:var(--acento)">Ver su asistencia, tareas y calificaciones →</span></a>`; }).join('')}</div>
+  ${total ? `<a class="tarjeta" href="#padres-pagos" style="border:2px solid var(--mal);color:inherit"><div class="fila"><div><span class="chip mal">Total pendiente de la familia</span><p style="margin:8px 0 0;font-size:22px;font-weight:700">${pesos(total)}</p></div><span class="btn" style="padding:8px 12px;font-size:13px">Ver colegiaturas</span></div></a>` : ''}
+  <span style="font-size:13px;color:var(--gris);text-align:center">Los avisos y mensajes dicen siempre de qué hijo se trata.</span>`;
 }
 
 async function cargarProfesor(yo) {
@@ -179,6 +213,7 @@ async function cargarProfesor(yo) {
   prepararCal(grupos, cal, yo.nivel);
   const {personas} = await cargarGrupos(grupos, null);
   REAL.usuarios = Object.fromEntries(Object.values(personas).map(p => [p.id, p.usuario || '']));
+  window.NOMBRES = Object.fromEntries(Object.values(personas).map(p => [p.id, p.nombre]));
   reemplazar(GRUPOS_PROF, grupos.map(comoGrupoProf));
   const ids = [...new Set(grupos.flatMap(g => ALUMNOS_G[g.id].map(a => a[0])))];
   const [tut, recibidos, enviados] = await Promise.all([L('tutores', {alumno_id: ids}), L('mensajes', {para: yo.id}), L('mensajes', {de: yo.id})]);
@@ -207,7 +242,7 @@ async function cargarReal(yo) {
   else if (yo.rol === 'padre') await cargarPadre(yo);
   else if (yo.rol === 'profesor') await cargarProfesor(yo);
 }
-const casa = () => ({alumno: 'inicio', padre: 'padres', profesor: 'prof-horario'}[REAL.rol]);
+const casa = () => REAL.rol === 'padre' && REAL.hijos?.length > 1 ? 'padres-hijos' : ({alumno: 'inicio', padre: 'padres', profesor: 'prof-horario'}[REAL.rol]);
 
 // ---------- Lo que se guarda en la base ----------
 Object.assign(PERSISTIR, {
@@ -328,7 +363,9 @@ V.pagos = () => {
   const ad = adeudo(), P = REAL.pagos, h = hoy0(), padre = REAL.rol === 'padre', quien = padre ? REAL.hijo.nombre.split(' ')[0] : '';
   const fila = p => { const v = deIso(p.vence), vencido = !p.pagado_en && v < h;
     return `<div class="it"><div class="t"><b>${esc(p.concepto)}</b><span>${pesos(p.monto)} · ${p.pagado_en ? 'Pagado el ' + dIso(p.pagado_en) : (vencido ? 'Venció el ' : 'Vence el ') + dIso(p.vence)}</span></div>${p.pagado_en ? `<span class="chip ok">${ic('check', 'style="width:14px;height:14px"')} Pagado</span>` : vencido ? `<span class="chip mal">Vencido</span><button class="btn" data-pagar="${p.id}" style="padding:8px 12px;font-size:13px">Pagar</button>` : `<span class="chip">${ic('reloj', 'style="width:14px;height:14px"')} Por vencer</span>`}</div>`; };
-  return `
+  const familia = padre && REAL.hijos.length > 1 ? `<section class="tarjeta"><div class="fila"><h2>Toda la familia</h2><b style="font-size:18px;color:${REAL.hijos.some(h => pendienteDe(h.id)) ? 'var(--mal)' : 'var(--ok)'}">${pesos(REAL.hijos.reduce((a, h) => a + pendienteDe(h.id), 0))} pendiente</b></div>
+    <div class="lista">${REAL.hijos.map(h => `<div class="it"><div class="t"><b>${esc(h.nombre)}</b><span>${NIVELES[h.nivel]} · ${esc(REAL.salonDe[h.id])}</span></div>${pendienteDe(h.id) ? `<span class="chip mal">${pesos(pendienteDe(h.id))}</span>` : '<span class="chip ok">Al corriente</span>'}${h.id === REAL.alumnoId ? '<span class="chip">Viendo</span>' : `<button class="btn sec" data-ver-hijo="${h.id}" data-ruta="padres-pagos" style="padding:7px 12px;font-size:13px">Ver</button>`}</div>`).join('')}</div></section>` : '';
+  return `${familia}
   <section class="hero" style="background:linear-gradient(135deg,${ad.total ? '#B42318,#7A1710' : '#1F7A4D,#145536'})"><p>${ad.total ? 'Saldo vencido' : 'Saldo pendiente'}${padre ? ' · ' + esc(quien) : ''}</p><h2>${pesos(ad.total)}</h2><p>${ad.total ? `${ad.venc.length} pago${ad.venc.length > 1 ? 's' : ''} vencido${ad.venc.length > 1 ? 's' : ''} · págalo para evitar recargos` : ad.prox[0] ? `Al corriente · ${ad.prox[0].concepto} vence el ${dIso(ad.prox[0].vence)}` : 'Al corriente · sin pagos pendientes'}</p></section>
   <div class="rejilla">
    <section class="tarjeta"><h2>${padre ? 'Colegiaturas de ' + esc(quien) : 'Mis pagos del ciclo'}</h2><div class="lista">${P.map(fila).join('') || '<div class="vacio">Sin pagos registrados.</div>'}</div></section>
@@ -500,6 +537,7 @@ function padresReal() {
   const hoyTxt2 = !hoyD || !hoyD.cl.length || hoyD.sin ? {t: 'Hoy no hay clases', s: hoyD?.sin || 'Fin de semana', c: 'inherit'} : hoyD.est === 'ok' ? {t: 'Asistió', s: 'Entró a todas sus clases de hoy', c: 'var(--ok)'} : hoyD.est === 'mal' ? {t: 'No asistió', s: 'Según el pase de lista', c: 'var(--mal)'} : hoyD.est === 'aviso' ? {t: hoyD.txt, s: 'Toca el día abajo para ver el detalle', c: 'var(--aviso)'} : {t: 'Sin registro aún', s: 'El maestro todavía no pasa lista', c: 'inherit'};
   const sel = diaSel != null ? semana[diaSel] : null;
   return `
+  ${REAL.hijos.length > 1 ? `<div class="fila" style="gap:8px;flex-wrap:wrap"><span style="font-size:14px;color:var(--gris)">Estás viendo a <b style="color:var(--tinta)">${esc(HIJA.nombre.split(' ')[0])}</b></span><div style="display:flex;gap:6px;flex-wrap:wrap">${REAL.hijos.filter(x => x.id !== REAL.alumnoId).map(x => `<button class="btn sec" data-ver-hijo="${x.id}" style="padding:7px 12px;font-size:13px">Ver a ${esc(x.nombre.split(' ')[0])}</button>`).join('')}</div></div>` : ''}
   <section class="hero portada" id="portada" style="background:linear-gradient(135deg,#0E6E8C,#0A4D63)"><span class="formas" aria-hidden="true"><i></i><i></i><i></i></span><p>${esc(FAMILIA.parentesco)} de</p><h2>${esc(HIJA.nombre)}</h2><p>${HIJA.nivel} · ${esc(HIJA.grado)} · ${esc(HIJA.grupo)}${HIJA.tutor ? ' · ' + (kinder || h.nivel === 'primaria' ? 'Titular: ' : 'Tutor(a): ') + esc(HIJA.tutor) : ''}</p></section>
   ${avisosHTML()}
   ${examenesHTML(`Los pone su maestro en el calendario; ${esc(REAL.hijo.nombre.split(' ')[0])} también los ve en su cuenta.`)}
@@ -538,6 +576,7 @@ const pPadresOrig = pintarPadres;
 pintarPadres = function (r) {
   if (!REAL) return pPadresOrig(r);
   const def = RUTAS_PADRES.find(x => x[0] === r) || RUTAS_PADRES[0], k = def[0];
+  if (k === 'padres-hijos') { marco(k, def[1], hijosReal()); document.title = 'Mis hijos · Familia · miescuela.com'; return; }
   if (k === 'padres') {
     marco(k, def[1], padresReal());
     const mn = document.querySelector('main');
@@ -577,6 +616,8 @@ document.addEventListener('click', async e => {
   if (mb) { mesCal.setMonth(mesCal.getMonth() + +mb.dataset.mes); document.getElementById('calm').innerHTML = mesHTML(); return; }
   const pg = e.target.closest('[data-pagar]');
   if (pg) { alert('Prototipo: aquí se abriría el pago en línea con tarjeta. Al confirmarse, el pago aparece como pagado y se genera la factura con tus datos fiscales.'); return; }
+  const vh = e.target.closest('[data-ver-hijo]');
+  if (vh) { e.preventDefault(); return verHijo(vh.dataset.verHijo, vh.dataset.ruta || 'padres'); }
   const dt = e.target.closest('[data-detalle]');
   if (dt) { e.preventDefault(); detalleAlumno(dt.dataset.detalle, REAL.alumnoId); document.getElementById('dmsg')?.remove(); }
 });
@@ -593,11 +634,41 @@ function mostrarError(x) {
    <a class="btn" href="#" onclick="location.reload();return false" style="text-align:center">Volver a intentar</a><a class="btn sec" href="#salir-c" style="text-align:center">Salir</a></div></div>`;
 }
 addEventListener('error', e => { if (REAL && !document.querySelector('main')) mostrarError(e.error || e.message); });
+function pantallaContrasena(yo, obligatoria) {
+  const raiz = document.getElementById('raiz');
+  raiz.innerHTML = `<div class="login"><form class="tarjeta" id="pcf" style="max-width:440px;width:100%;display:flex;flex-direction:column;gap:12px">
+    <div class="logo" style="display:flex;gap:10px;align-items:center"><b style="width:38px;height:38px;border-radius:10px;background:var(--marca);color:#fff;display:grid;place-items:center">me</b><span style="font-weight:700">miescuela.com</span></div>
+    <h2>${obligatoria ? `Hola, ${esc(yo.nombre.split(' ')[0])}. Crea tu contraseña` : 'Cambiar contraseña'}</h2>
+    <span style="font-size:14px;color:var(--gris)">${obligatoria ? 'Entraste con la contraseña que te dio la escuela. Antes de seguir, crea una que solo tú conozcas. Control escolar no podrá verla.' : 'Escribe tu nueva contraseña. Control escolar no puede verla.'}</span>
+    <label>Usuario<input value="${esc(yo.usuario || '')}" disabled></label>
+    <label>Nueva contraseña<input type="password" id="pc1" autocomplete="new-password" required></label>
+    <label>Repítela<input type="password" id="pc2" autocomplete="new-password" required></label>
+    <div class="req-clave" id="pcreq"></div>
+    <span id="pcmsg" style="font-size:13px;color:var(--mal)"></span>
+    <button class="btn" type="submit" id="pcb" disabled>Guardar contraseña</button>
+    ${obligatoria ? '<a href="#salir-c" style="text-align:center;font-size:13px">Salir</a>' : '<a href="#" id="pcvolver" style="text-align:center;font-size:13px">Volver</a>'}
+    <div id="pclog"></div></form></div>`;
+  const f = raiz.querySelector('#pcf'), a = f.querySelector('#pc1'), b = f.querySelector('#pc2');
+  const reglas = () => [[a.value.length >= 8, 'Al menos 8 caracteres'], [/[a-záéíóúñ]/i.test(a.value) && /\d/.test(a.value), 'Letras y números'], [a.value && a.value === b.value, 'Las dos coinciden']];
+  const revisa = () => { const r = reglas(); f.querySelector('#pcreq').innerHTML = r.map(([ok, t]) => `<span class="${ok ? 'si' : ''}">${ok ? '✓' : '○'} ${t}</span>`).join(''); f.querySelector('#pcb').disabled = !r.every(x => x[0]); };
+  a.oninput = b.oninput = revisa; revisa(); a.focus();
+  f.querySelector('#pcvolver')?.addEventListener('click', e => { e.preventDefault(); history.length > 1 ? history.back() : (location.hash = '#c'); });
+  f.onsubmit = async e => { e.preventDefault(); const btn = f.querySelector('#pcb'); btn.disabled = true; f.querySelector('#pcmsg').textContent = '';
+    try { await db().cambiarContrasena(a.value); await db().rpc('contrasena_cambiada'); yo.debe_cambiar = false;
+      if (obligatoria) { history.replaceState(null, '', '#c'); location.reload(); return; }
+      raiz.querySelector('.login').innerHTML = `<div class="tarjeta" style="max-width:440px;width:100%;display:flex;flex-direction:column;gap:12px;text-align:center"><h2>Listo</h2><span style="color:var(--gris)">Tu contraseña se cambió. La próxima vez entra con la nueva.</span><a class="btn" href="#c">Continuar</a></div>`; }
+    catch (x) { f.querySelector('#pcmsg').textContent = 'No se pudo guardar: ' + (/same|different/i.test(x.message) ? 'debe ser distinta de la anterior.' : x.message); btn.disabled = false; } };
+  // Transparencia: la persona ve quién creó o restableció su acceso
+  L('accesos_log', {persona_id: yo.id}, {orden: 'fecha', desc: true, limite: 5}).then(l => { if (!l.length) return;
+    f.querySelector('#pclog').innerHTML = `<div style="border-top:1px solid var(--linea);padding-top:10px;font-size:12.5px;color:var(--gris)"><b style="color:var(--tinta)">Movimientos de tu acceso</b>${l.map(x => `<div>${{creado: 'Acceso creado por la escuela', restablecido: 'Contraseña restablecida por control escolar', cambiada: 'Cambiaste tu contraseña'}[x.accion]} · ${hora(x.fecha)}</div>`).join('')}</div>`; }).catch(() => {});
+}
+window.pantallaContrasena = pantallaContrasena;
 function pantallaCarga(yo) {
   document.getElementById('raiz').innerHTML = `<div class="login"><div style="color:#fff;text-align:center;display:flex;flex-direction:column;gap:10px;align-items:center"><div class="logo" style="justify-content:center"><b style="background:#fff;color:var(--marca)">me</b><span>miescuela.com</span></div><span style="opacity:.85">Preparando lo de ${esc(yo.nombre.split(' ')[0])}…</span></div></div>`;
 }
 let cargaEnCurso = null;
 async function entrarReal(yo, r) {
+  if (yo.debe_cambiar) return pantallaContrasena(yo, true);
   if (!cargaEnCurso) { pantallaCarga(yo); cargaEnCurso = cargarReal(yo); }
   try { await cargaEnCurso; } catch (x) { cargaEnCurso = null; REAL = null; return vistaEntrar('No se pudo cargar tu información: ' + (x.message || x)); }
   const destino = r && !(r === 'entrar' || r === 'c' || r.startsWith('c/')) ? guardaReal(r) : casa();
@@ -609,6 +680,8 @@ window.pintarConectado = async r => {
   if (r === 'salir-c' && REAL) { try { await db().salir(); } catch {} history.replaceState(null, '', '#entrar'); location.reload(); return; }
   if (r === 'entrar' || r === 'c' || r.startsWith('c/')) {
     let yo = null; try { yo = await quienSoy(); } catch {}
+    if (yo && yo.debe_cambiar) return pantallaContrasena(yo, true);
+    if (yo && r === 'c/contrasena') return pantallaContrasena(yo, false);
     if (yo && yo.rol !== 'admin') return entrarReal(yo, '');
   }
   return pcOrig(r);

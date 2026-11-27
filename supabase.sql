@@ -8,7 +8,7 @@
 create extension if not exists pgcrypto with schema extensions;
 
 -- ---------- Limpieza (para poder correrlo otra vez) ----------
-drop table if exists public.movimientos, public.pagos, public.calendario, public.historial, public.capturas, public.formas_calificar, public.avisos_leidos, public.avisos,
+drop table if exists public.accesos_log, public.movimientos, public.pagos, public.calendario, public.historial, public.capturas, public.formas_calificar, public.avisos_leidos, public.avisos,
   public.anotaciones, public.mensajes, public.entregas, public.tareas, public.asistencia,
   public.tutores, public.inscripciones, public.grupos, public.personas cascade;
 delete from auth.identities where user_id in (select id from auth.users where email like '%@escuela.test');
@@ -26,6 +26,9 @@ create table public.personas (
   grado     text,
   fecha_nacimiento date,
   estado    text not null default 'activo' check (estado in ('activo','baja','transferido')),
+  correo    text,                       -- correo real de contacto (para confirmar quién pide restablecer su contraseña)
+  telefono  text,
+  debe_cambiar boolean not null default false,   -- la primera vez (o tras restablecer) debe crear su propia contraseña
   creado_en timestamptz not null default now()
 );
 
@@ -107,6 +110,7 @@ create table public.mensajes (
   adjunto_nombre text,
   adjunto_tipo   text,
   tarea_id       bigint references public.tareas(id) on delete cascade,   -- comentario sobre una tarea
+  sobre_alumno   uuid references public.personas(id) on delete set null,  -- papá con varios hijos: de cuál hijo se trata
   creado_en      timestamptz not null default now(),
   check (para is not null or grupo_id is not null),
   check (coalesce(length(texto),0) > 0 or adjunto_ruta is not null)
@@ -206,6 +210,16 @@ create table public.movimientos (
   fecha           timestamptz not null default now()
 );
 
+-- Registro de accesos: quién creó o restableció cada cuenta y cuándo. La persona ve el suyo.
+create table public.accesos_log (
+  id         bigint generated always as identity primary key,
+  persona_id uuid not null references public.personas(id) on delete cascade,
+  accion     text not null check (accion in ('creado','restablecido','cambiada')),
+  hecho_por  uuid references public.personas(id) on delete set null,
+  detalle    text,
+  fecha      timestamptz not null default now()
+);
+
 create index on public.asistencia (alumno_id, fecha);
 create index on public.pagos (alumno_id);
 create index on public.calendario (fecha);
@@ -261,6 +275,8 @@ alter table public.calendario enable row level security;
 alter table public.pagos enable row level security;
 alter table public.historial enable row level security;
 alter table public.movimientos enable row level security;
+alter table public.accesos_log enable row level security;
+create policy "ver registro de accesos" on public.accesos_log for select to authenticated using (public.es_admin() or persona_id = public.mi_persona());
 create policy "admin maneja movimientos" on public.movimientos for all to authenticated using (public.es_admin()) with check (public.es_admin());
 
 -- El calendario escolar lo ve toda la comunidad; solo administración lo cambia.
@@ -368,6 +384,65 @@ grant usage on schema public to authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 revoke all on all tables in schema public from anon;
 grant execute on all functions in schema public to authenticated;
+-- Nadie (ni control escolar) puede cambiar a mano a qué cuenta corresponde una persona, ni su usuario, ni saltarse el cambio de contraseña:
+-- eso solo lo hacen las funciones de abajo, que dejan registro.
+revoke insert, update on public.personas from authenticated;
+grant insert (rol, nivel, nombre, grado, usuario, fecha_nacimiento, estado, correo, telefono) on public.personas to authenticated;
+grant update (nivel, nombre, grado, fecha_nacimiento, estado, correo, telefono) on public.personas to authenticated;
+
+-- ---------- Accesos: la escuela crea las cuentas; la contraseña se genera sola y solo se ve una vez ----------
+create or replace function public.clave_aleatoria() returns text language sql volatile set search_path = public, extensions as $$
+  select string_agg(substr('abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789', 1 + (get_byte(b, i) % 55), 1), '')
+  from (select extensions.gen_random_bytes(10) b) x, generate_series(0, 9) i $$;
+create or replace function public.nuevo_usuario(p_rol text) returns text language plpgsql set search_path = public as $$
+declare pre text := case p_rol when 'alumno' then 'A' when 'padre' then 'F' else 'P' end || to_char(current_date, 'YY'); n int := 1; u text;
+begin
+  loop u := pre || lpad(n::text, 4, '0'); exit when not exists (select 1 from public.personas where lower(usuario) = lower(u)); n := n + 1; end loop;
+  return u;
+end $$;
+create or replace function public.crear_acceso(p_persona uuid) returns json language plpgsql security definer set search_path = public, extensions as $$
+declare p public.personas; u uuid := gen_random_uuid(); clave text := public.clave_aleatoria(); v_usuario text; v_correo text;
+begin
+  if not public.es_admin() then raise exception 'Solo control escolar puede crear accesos.'; end if;
+  select * into p from public.personas where id = p_persona;
+  if p.id is null then raise exception 'No existe esa persona.'; end if;
+  if p.auth_id is not null then raise exception '% ya tiene acceso. Si olvidó su contraseña, usa «Restablecer».', p.nombre; end if;
+  if p.rol = 'admin' then raise exception 'Las cuentas de control escolar se crean aparte.'; end if;
+  v_usuario := coalesce(p.usuario, public.nuevo_usuario(p.rol)); v_correo := lower(v_usuario) || '@escuela.test';
+  insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+    created_at, updated_at, confirmation_token, email_change, email_change_token_new, recovery_token)
+  values ('00000000-0000-0000-0000-000000000000', u, 'authenticated', 'authenticated', v_correo, crypt(clave, gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}', jsonb_build_object('nombre', p.nombre), now(), now(), '', '', '', '');
+  insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+  values (gen_random_uuid(), u, u::text, jsonb_build_object('sub', u::text, 'email', v_correo, 'email_verified', true), 'email', now(), now(), now());
+  update public.personas set auth_id = u, usuario = v_usuario, debe_cambiar = true where id = p_persona;
+  insert into public.accesos_log (persona_id, accion, hecho_por) values (p_persona, 'creado', public.mi_persona());
+  return json_build_object('usuario', v_usuario, 'contrasena', clave);
+end $$;
+-- Restablecer: solo si quien lo pide da el correo que la escuela tiene registrado (el suyo o, si es alumno, el de su mamá o papá).
+create or replace function public.restablecer_acceso(p_persona uuid, p_correo text) returns json language plpgsql security definer set search_path = public, extensions as $$
+declare p public.personas; clave text := public.clave_aleatoria(); ok boolean;
+begin
+  if not public.es_admin() then raise exception 'Solo control escolar puede restablecer contraseñas.'; end if;
+  select * into p from public.personas where id = p_persona;
+  if p.auth_id is null then raise exception 'Esta persona todavía no tiene acceso; usa «Crear acceso».'; end if;
+  if p.rol = 'admin' then raise exception 'Las cuentas de control escolar se restablecen aparte.'; end if;
+  ok := lower(trim(coalesce(p_correo, ''))) <> '' and (lower(trim(p.correo)) = lower(trim(p_correo))
+        or exists (select 1 from public.tutores t join public.personas x on x.id = t.padre_id where t.alumno_id = p.id and lower(trim(x.correo)) = lower(trim(p_correo))));
+  if not coalesce(ok, false) then raise exception 'Ese correo no está registrado para esta cuenta. No se puede restablecer.'; end if;
+  update auth.users set encrypted_password = crypt(clave, gen_salt('bf')), updated_at = now() where id = p.auth_id;
+  update public.personas set debe_cambiar = true where id = p_persona;
+  insert into public.accesos_log (persona_id, accion, hecho_por, detalle) values (p_persona, 'restablecido', public.mi_persona(),
+    'Confirmado con el correo ' || regexp_replace(lower(trim(p_correo)), '^(.).*(@.*)$', '\1•••\2'));
+  insert into public.mensajes (de, para, texto) values (public.mi_persona(), p_persona,
+    'Control escolar restableció tu contraseña el ' || to_char(now() at time zone 'America/Mexico_City', 'DD/MM/YYYY HH24:MI') || '. Al entrar te pediremos crear una nueva. Si tú no lo pediste, avísanos.');
+  return json_build_object('usuario', p.usuario, 'contrasena', clave);
+end $$;
+-- Quien entra cambia su contraseña (con su propia sesión); esto solo deja el registro y quita el aviso.
+create or replace function public.contrasena_cambiada() returns void language sql security definer set search_path = public as $$
+  update public.personas set debe_cambiar = false where auth_id = auth.uid();
+  insert into public.accesos_log (persona_id, accion, hecho_por) select id, 'cambiada', id from public.personas where auth_id = auth.uid(); $$;
+revoke execute on function public.clave_aleatoria(), public.nuevo_usuario(text) from authenticated, anon, public;
 
 -- ---------- Archivos: entregas de tareas y adjuntos de mensajes (privados) ----------
 insert into storage.buckets (id, name, public) values ('entregas','entregas',false), ('adjuntos','adjuntos',false) on conflict (id) do nothing;
@@ -427,7 +502,7 @@ create or replace function pg_temp.lv(dias int[], ini text, fin text) returns te
 do $$
 declare
   -- Pedro Páramo García a lo largo de su vida escolar (mismo alumno, distintas etapas).
-  pk uuid; pp uuid; ps uuid; pb uuid; pu uuid;
+  pk uuid; pp uuid; ps uuid; pb uuid; pu uuid; lu uuid;
   mk uuid; ms uuid; mb uuid;
   tk uuid; tp uuid; ts uuid; tb uuid; tu uuid; adm uuid;
   g record; a record; per record; i int; n int; k int; f date; h int; t_id bigint; nombres text[]; apellidos text[];
@@ -448,6 +523,7 @@ begin
   ms := pg_temp.cuenta('mama.secundaria', 'Gabriela García Ruiz', 'padre', null, 'Mamá de Pedro (secundaria)');
   mb := pg_temp.cuenta('mama.bachillerato', 'Gabriela García Ruiz', 'padre', null, 'Mamá de Pedro (bachillerato)');
   insert into public.tutores (padre_id, alumno_id, parentesco) values (mk, pk, 'Mamá'), (ms, ps, 'Mamá'), (mb, pb, 'Mamá');
+  update public.personas set correo = 'gabriela.garcia@ejemplo.com', telefono = '614 555 0142' where id in (mk, ms, mb);
 
   tk := pg_temp.cuenta('prof.kinder', 'Miss Lupita Herrera', 'profesor', 'kinder', 'Titular de 3.º A');
   tp := pg_temp.cuenta('prof.primaria', 'Mtro. Andrés Villa', 'profesor', 'primaria', 'Titular de 4.º B');
@@ -504,14 +580,19 @@ begin
         where x.id = g.id or x.id like g.id || '-%';
     end loop;
   end loop;
+  -- Lucía, hermana menor de Pedro, en 4.º A de primaria: su mamá (cuenta de secundaria) ve a sus dos hijos.
+  lu := pg_temp.alumno_sin_cuenta('Lucía Páramo García', 'primaria', '4.º de primaria', 'P4A-07');
+  insert into public.inscripciones select x.id, lu from public.grupos x where x.id = 'P4A' or x.id like 'P4A-%';
+  insert into public.tutores (padre_id, alumno_id, parentesco) values (ms, lu, 'Mamá');
   update public.personas p set fecha_nacimiento = (select fecha_nacimiento from public.personas where id = case p.nivel when 'kinder' then pk when 'primaria' then pp when 'secundaria' then ps when 'bachillerato' then pb else pu end) + (abs(hashtext(p.id::text)) % 300) where p.rol = 'alumno' and p.fecha_nacimiento is null;
   -- Mamá o papá (sin cuenta) de cada compañero menor de edad, para que control escolar pueda mandarles avisos y recordatorios.
-  for a in select p.id, p.nombre from public.personas p where p.rol = 'alumno' and p.nivel <> 'universidad' and p.id not in (pk,pp,ps,pb,pu) loop
+  for a in select p.id, p.nombre from public.personas p where p.rol = 'alumno' and p.nivel <> 'universidad' and p.id not in (pk,pp,ps,pb,pu,lu) loop
     h := abs(hashtext(a.id::text || 'tutor')) % 100;
     insert into public.personas (rol, nombre, grado) values ('padre',
       (case when h < 70 then (array['Laura','Patricia','Claudia','Verónica','Mónica','Adriana','Teresa','Lorena'])[1 + h % 8] else (array['Jorge','Ricardo','Arturo','Fernando','Raúl','Héctor'])[1 + h % 6] end)
       || ' ' || split_part(a.nombre, ' ', 2) || ' ' || (array['Ruiz','Soto','Peña','Vega','Luna','Ríos','Mora','Gil'])[1 + (h / 8) % 8],
       'Familia de ' || split_part(a.nombre, ' ', 1)) returning id into tutor;
+    update public.personas set correo = lower(translate(split_part(nombre, ' ', 1) || '.' || split_part(nombre, ' ', 2), 'áéíóúñ', 'aeioun')) || '@ejemplo.com' where id = tutor;
     insert into public.tutores (padre_id, alumno_id, parentesco) values (tutor, a.id, case when h < 70 then 'Mamá' else 'Papá' end);
   end loop;
 
@@ -637,7 +718,12 @@ begin
    (ps, ts, 'S2C', 'conducta', 'Se distrae con el celular en clase. Hablé con él y mejoró.', true, now() - interval '10 days'),
    (ps, ts, 'S2C', 'fortaleza', 'Muy participativo en los problemas en el pizarrón.', true, now() - interval '4 days'),
    (pb, tb, 'B3A', 'reforzar', 'Necesita repasar estequiometría antes del examen.', true, now() - interval '8 days'),
-   (pb, tb, 'B3A', 'general', 'Comentario interno: proponerlo para la feria de ciencias.', false, now() - interval '2 days');
+   (pb, tb, 'B3A', 'general', 'Comentario interno: proponerlo para la feria de ciencias.', false, now() - interval '2 days'),
+   (lu, (select profesor_id from public.grupos where id = 'P4A'), 'P4A', 'fortaleza', 'Muy ordenada con sus cuadernos y siempre ayuda a sus compañeros.', true, now() - interval '5 days');
+  -- Correos de profesores, administración y del alumno mayor de edad; los accesos de la demostración se crearon al inicio del ciclo.
+  update public.personas set correo = lower(translate(replace(replace(replace(replace(nombre, 'Mtra. ', ''), 'Mtro. ', ''), 'Miss ', ''), 'Lic. ', ''), 'áéíóúñ ', 'aeioun.')) || '@miescuela.edu.mx' where rol in ('profesor','admin');
+  update public.personas set correo = 'pedro.paramo@ejemplo.com' where id = pu;
+  insert into public.accesos_log (persona_id, accion, hecho_por, fecha) select id, 'creado', adm, date '2026-08-10' from public.personas where auth_id is not null and rol <> 'admin';
 
   -- Avisos de la escuela.
   insert into public.avisos (autor_id, titulo, texto, nivel, creado_en) values
